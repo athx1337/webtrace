@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+httpx
+dnspython
+python-whois
+python-dotenv
+slowapi
+google-generativeai

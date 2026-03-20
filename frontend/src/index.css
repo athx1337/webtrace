@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+@theme {
+  --color-inverse-surface: #e5e2e1;
+  --color-surface-container-low: #1c1b1b;
+  --color-on-tertiary-fixed-variant: #930010;
+  --color-on-surface-variant: #b9cbbc;
+  --color-inverse-primary: #006d40;
+  --color-error-container: #93000a;
+  --color-surface-container-lowest: #0e0e0e;
+  --color-on-tertiary-container: #c7041a;
+  --color-surface-container-highest: #353534;
+  --color-on-tertiary-fixed: #410003;
+  --color-on-secondary-container: #694300;
+  --color-primary-fixed: #56ffa7;
+  --color-surface-bright: #3a3939;
+  --color-secondary: #ffcf90;
+  --color-on-primary-container: #007142;
+  --color-inverse-on-surface: #313030;
+  --color-on-primary: #00391f;
+  --color-surface-dim: #131313;
+  --color-secondary-fixed-dim: #ffb952;
+  --color-outline-variant: #3b4b3f;
+  --color-on-surface: #e5e2e1;
+  --color-error: #ffb4ab;
+  --color-tertiary-fixed: #ffdad6;
+  --color-on-error: #690005;
+  --color-tertiary-fixed-dim: #ffb3ac;
+  --color-surface-variant: #353534;
+  --color-primary-fixed-dim: #00e38a;
+  --color-on-secondary-fixed-variant: #633f00;
+  --color-tertiary-container: #ffd6d2;
+  --color-on-background: #e5e2e1;
+  --color-background: #0a0a0a;
+  --color-on-tertiary: #680008;
+  --color-on-secondary-fixed: #291800;
+  --color-on-primary-fixed-variant: #00522f;
+  --color-primary: #f3fff3;
+  --color-on-secondary: #452b00;
+  --color-surface: #131313;
+  --color-secondary-fixed: #ffddb4;
+  --color-on-error-container: #ffdad6;
+  --color-primary-container: #00ff9c;
+  --color-surface-container-high: #2a2a2a;
+  --color-outline: #1f1f1f;
+  --color-surface-container: #201f1f;
+  --color-surface-tint: #00e38a;
+  --color-secondary-container: #ffaa00;
+  --color-tertiary: #fffbff;
+  --color-on-primary-fixed: #002110;
+
+  --font-headline: "Space Grotesk", sans-serif;
+  --font-body: "Inter", sans-serif;
+  --font-label: "JetBrains Mono", monospace;
+
+  --radius-DEFAULT: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+  --radius-full: 9999px;
+}
+
+@layer utilities {
+  .terminal-glow {
+    transition: all 0.3s ease;
+  }
+  .terminal-glow:hover {
+    box-shadow: 0 0 12px rgba(0, 255, 156, 0.15);
+    border-color: var(--color-primary-container) !important;
+  }
+  .ascii-art {
+    line-height: 1.1;
+    font-family: 'JetBrains Mono', monospace;
+    white-space: pre;
+  }
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-inverse-surface);
+}
