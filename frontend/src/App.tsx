@@ -157,15 +157,8 @@ interface AnalyzeResponse {
 // ---------- Static Components ----------
 const TopNav = () => (
   <nav className="flex justify-between items-center w-full px-6 py-3 bg-surface-container-lowest font-label uppercase tracking-tighter border-b border-primary-container/20 shadow-[0_4px_10px_rgba(0,255,156,0.05)] z-50 shrink-0 relative">
-    <div className="flex items-center gap-4">
-      <pre className="text-primary-container font-mono font-bold leading-[1.1] text-[8px] md:text-[10px] hidden sm:block pointer-events-none select-none">
-{`  ▄▄▄                                              
- █▀██  ██  ██▀▀     █▄    █▄                       
-   ██  ██  ██       ██   ▄██▄▄                     
-   ██  ██  ██ ▄█▀█▄ ████▄ ██ ████▄▄▀▀█▄ ▄███▀ ▄█▀█▄
-   ██▄ ██▄ ██ ██▄█▀ ██ ██ ██ ██   ▄█▀██ ██    ██▄█▀
-   ▀████▀███▀▄▀█▄▄▄▄████▀▄██▄█▀  ▄▀█▄██▄▀███▄▄▀█▄▄▄`}
-      </pre>
+    <div className="text-2xl font-headline font-bold text-primary-container tracking-widest flex items-center gap-3">
+      <img src="/logo.png" alt="WEBTRACE" className="w-6 h-6 object-contain" style={{ filter: 'drop-shadow(0 0 8px rgba(0, 255, 156, 0.4))' }} /> WEBTRACE
     </div>
   </nav>
 );
@@ -337,12 +330,17 @@ export default function App() {
           {/* Header & Input */}
           <motion.div variants={fadeUpBlock} className="mb-8">
             <div className="flex items-end justify-between mb-6">
-              <img 
-                src="/logo.png" 
-                alt="WEBTRACE Logo" 
-                className="hidden md:block w-28 md:w-36 object-contain select-none pointer-events-none mb-2" 
-                style={{ imageRendering: 'pixelated', filter: 'drop-shadow(0 0 16px rgba(0, 255, 156, 0.4))' }} 
-              />
+              <pre className="hidden md:block ascii-art text-primary-container opacity-80 text-[clamp(6px,0.8vw,10px)] select-none pointer-events-none font-bold leading-none">
+                {String.raw`__/\\\______________/\\\__/\\\\\\\\\\\\\\\__/\\\\\\\\\\\\\____/\\\\\\\\\\\\\\\____/\\\\\\\\\_________/\\\\\\\\\___________/\\\\\\\\\__/\\\\\\\\\\\\\\\_        
+ _\/\\\_____________\/\\\_\/\\\///////////__\/\\\/////////\\\_\///////\\\/////___/\\\///////\\\_____/\\\\\\\\\\\\\______/\\\////////__\/\\\///////////__       
+  _\/\\\_____________\/\\\_\/\\\_____________\/\\\_______\/\\\_______\/\\\_______\/\\\_____\/\\\____/\\\/////////\\\___/\\\/___________\/\\\_____________      
+   _\//\\\____/\\\____/\\\__\/\\\\\\\\\\\_____\/\\\\\\\\\\\\\\________\/\\\_______\/\\\\\\\\\\\/____\/\\\_______\/\\\__/\\\_____________\/\\\\\\\\\\\_____     
+    __\//\\\__/\\\\\__/\\\___\/\\\///////______\/\\\/////////\\\_______\/\\\_______\/\\\//////\\\____\/\\\\\\\\\\\\\\\_\/\\\_____________\/\\\///////______    
+     ___\//\\\/\\\/\\\/\\\____\/\\\_____________\/\\\_______\/\\\_______\/\\\_______\/\\\____\//\\\___\/\\\/////////\\\_\//\\\____________\/\\\_____________   
+      ____\//\\\\\\//\\\\\_____\/\\\_____________\/\\\_______\/\\\_______\/\\\_______\/\\\_____\//\\\__\/\\\_______\/\\\__\///\\\__________\/\\\_____________  
+       _____\//\\\__\//\\\______\/\\\\\\\\\\\\\\\_\/\\\\\\\\\\\\\/________\/\\\_______\/\\\______\//\\\_\/\\\_______\/\\\____\////\\\\\\\\\_\/\\\\\\\\\\\\\\\_ 
+        ______\///____\///_______\///////////////__\/////////////__________\///________\///________\///__\///________\///________\/////////__\///////////////__`}
+              </pre>
               <div className="text-right font-label text-[10px] uppercase tracking-[0.2em] text-on-surface/50 border-r-2 border-primary-container/40 pr-4">
                 <div><span className="text-primary-container">op_mode:</span> OSINT_DEEP_DIVE</div>
                 <div><span className="text-primary-container">modules:</span> LOADED_10</div>
