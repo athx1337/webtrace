@@ -16,7 +16,8 @@ import {
   Database,
   History,
   AlertTriangle,
-  Server
+  Server,
+  X
 } from 'lucide-react';
 
 // ---------- Interfaces (matched exactly to backend response shapes) ----------
@@ -163,7 +164,7 @@ const TopNav = () => (
   </nav>
 );
 
-const Footer = ({ serverStatus }: { serverStatus: 'checking' | 'waking' | 'awake' | 'offline' }) => {
+const Footer = ({ serverStatus, onPrivacyClick, onTermsClick }: { serverStatus: 'checking' | 'waking' | 'awake' | 'offline', onPrivacyClick: () => void, onTermsClick: () => void }) => {
   const statusConfig = {
     awake: { text: 'BACKEND: ONLINE', dotColor: 'bg-primary-container', textColor: 'text-primary-container', pulse: true },
     waking: { text: 'BACKEND: BOOTING', dotColor: 'bg-yellow-400', textColor: 'text-yellow-400', pulse: true },
@@ -181,11 +182,50 @@ const Footer = ({ serverStatus }: { serverStatus: 'checking' | 'waking' | 'awake
         </span>
         <span className="hidden sm:inline">node: hk-09.relay.net</span>
         <span className={serverStatus === 'awake' ? 'text-primary-container/70' : 'text-on-surface/30'}>
-          ping: {serverStatus === 'awake' ? '18ms' : '--- '}
+           ping: {serverStatus === 'awake' ? '18ms' : '--- '}
         </span>
       </div>
-      <div>© 2026 WEBTRACE // CLASSIFIED_ACCESS_ONLY</div>
+      <div className="flex gap-3 items-center">
+        <button onClick={onPrivacyClick} className="hover:text-primary-container transition-colors">PRIVACY POLICY</button>
+        <button onClick={onTermsClick} className="hover:text-primary-container transition-colors">TERMS OF SERVICE</button>
+        <span className="hidden sm:inline ml-2">© 2026 WEBTRACE // CLASSIFIED_ACCESS_ONLY</span>
+      </div>
     </footer>
+  );
+};
+
+const LegalModal = ({ type, onClose }: { type: 'privacy' | 'terms', onClose: () => void }) => {
+  const isPrivacy = type === 'privacy';
+  
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-sm p-4" onClick={onClose}>
+      <div className="bg-surface-container border border-outline-variant/30 p-6 max-w-lg w-full relative shadow-[0_0_30px_rgba(0,0,0,0.8)]" onClick={e => e.stopPropagation()}>
+        <button onClick={onClose} className="absolute top-4 right-4 text-on-surface/50 hover:text-primary-container">
+          <X className="w-5 h-5" />
+        </button>
+        <h2 className="text-xl font-headline font-bold text-primary-container mb-4 uppercase tracking-widest border-b border-primary-container/20 pb-2">
+          {isPrivacy ? 'Privacy Policy' : 'Terms of Service'}
+        </h2>
+        <div className="font-body text-sm leading-relaxed space-y-4 text-on-surface/80">
+          <p><strong className="text-primary-container font-mono font-bold tracking-widest">WEBTRACE</strong> is an educational project by athx1337.</p>
+          
+          {isPrivacy ? (
+            <>
+              <p>This tool does not require user accounts.</p>
+              <p>URLs submitted are processed only to generate a risk analysis result.</p>
+              <p>We do not intentionally store personal data.</p>
+              <p>This tool is provided for educational and demonstration purposes only.</p>
+            </>
+          ) : (
+            <>
+              <p>The results provided by this tool are not guaranteed to be 100% accurate.</p>
+              <p>This tool should not be used as your only security decision system.</p>
+              <p>The author is not responsible for any damages or losses resulting from the use of this tool.</p>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
   );
 };
 
@@ -213,6 +253,7 @@ export default function App() {
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [data, setData] = useState<AnalyzeResponse | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
+  const [legalModal, setLegalModal] = useState<'privacy' | 'terms' | null>(null);
 
   // System Status State ('checking', 'waking', 'awake', 'offline')
   const [serverStatus, setServerStatus] = useState<'checking' | 'waking' | 'awake' | 'offline'>('checking');
@@ -752,7 +793,12 @@ export default function App() {
           )}
         </motion.main>
       </div>
-      <Footer serverStatus={serverStatus} />
+      <Footer 
+        serverStatus={serverStatus} 
+        onPrivacyClick={() => setLegalModal('privacy')} 
+        onTermsClick={() => setLegalModal('terms')} 
+      />
+      {legalModal && <LegalModal type={legalModal} onClose={() => setLegalModal(null)} />}
     </div>
   );
 }
