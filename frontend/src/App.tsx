@@ -202,8 +202,75 @@ export default function App() {
   const [data, setData] = useState<AnalyzeResponse | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
 
+  // System Status State ('checking', 'waking', 'awake', 'offline')
+  const [serverStatus, setServerStatus] = useState<'checking' | 'waking' | 'awake' | 'offline'>('checking');
+  const [isWaitingForWake, setIsWaitingForWake] = useState(false);
+
+  // Global effect to wake up Render backend on page load and keep it alive
+  React.useEffect(() => {
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
+    const pingServer = () => {
+      // If it takes longer than 2 seconds, assume it's doing a cold boot
+      const timeout = setTimeout(() => {
+        setServerStatus(prev => prev === 'checking' ? 'waking' : prev);
+      }, 2000);
+
+      fetch(`${apiUrl}/api/ping`)
+        .then(res => {
+          if (res.ok) setServerStatus('awake');
+          else setServerStatus('offline');
+        })
+        .catch(() => {
+          setServerStatus('waking'); // Usually CORS fails before boot finishes
+        })
+        .finally(() => {
+          clearTimeout(timeout);
+        });
+    };
+
+    pingServer();
+
+    // Set up a structured heartbeat interval every 10 minutes (600,000 ms).
+    // Render's Free Tier hypervisor sleeps web services after 15 minutes of zero inbound HTTP traffic.
+    const heartbeatTimer = setInterval(pingServer, 10 * 60 * 1000);
+
+    return () => clearInterval(heartbeatTimer);
+  }, []);
+
+  // Rapid polling effect when waiting for wake
+  React.useEffect(() => {
+    let pollInterval: NodeJS.Timeout;
+    if (isWaitingForWake) {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
+      const poll = () => {
+        fetch(`${apiUrl}/api/ping`)
+          .then(res => {
+            if (res.ok) setServerStatus('awake');
+          })
+          .catch(() => {
+            setServerStatus('waking');
+          });
+      };
+
+      pollInterval = setInterval(poll, 3000);
+      poll(); // Ping immediately on queue enter
+    }
+    return () => {
+      if (pollInterval) clearInterval(pollInterval);
+    };
+  }, [isWaitingForWake]);
+
   const handleRunAnalysis = async () => {
     if (!targetUrl.trim()) return;
+
+    // Prevent scan execution if server is asleep, enter the pre-queue instead
+    if (serverStatus !== 'awake') {
+      setIsWaitingForWake(true);
+      return;
+    }
+
     setStatus("loading");
     setErrorMsg("");
     setData(null);
@@ -226,6 +293,16 @@ export default function App() {
       setStatus("error");
     }
   };
+
+  // Effect to auto-start the scan once the server announces it is awake
+  React.useEffect(() => {
+    if (isWaitingForWake && serverStatus === 'awake' && targetUrl) {
+      setIsWaitingForWake(false);
+      handleRunAnalysis();
+    }
+  }, [serverStatus, isWaitingForWake]); 
+
+
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-background text-inverse-surface relative selection:bg-primary-container selection:text-background font-body">
@@ -280,7 +357,7 @@ export default function App() {
               >
                 <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out"></div>
                 <span className="relative z-10 flex items-center gap-2 justify-center">
-                  {status === "loading" ? <><Loader2 className="w-4 h-4 animate-spin" /> RUNNING...</> : "EXECUTE"}
+                  {status === "loading" ? <><Loader2 className="w-4 h-4 animate-spin" /> RUNNING...</> : isWaitingForWake ? <><Loader2 className="w-4 h-4 animate-spin" /> WAKING BACKEND...</> : "EXECUTE"}
                 </span>
               </button>
             </div>
