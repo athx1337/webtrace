@@ -80,7 +80,7 @@ async def analyze(request: Request, body: AnalyzeRequest):
     whois_net_result, infra_result, threat_result = await asyncio.gather(
         whois_network(primary_ip) if primary_ip else _unavailable("whois_network"),
         infrastructure_scan(primary_ip) if primary_ip else _unavailable("infrastructure"),
-        threat_intel(domain, primary_ip),
+        threat_intel(hostname, primary_ip),
         return_exceptions=False,
     )
 

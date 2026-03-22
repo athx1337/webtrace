@@ -31,11 +31,16 @@ def normalize_url(raw: str) -> dict:
     except:
         pass
 
-    # Extract parts
-    parts = hostname.split(".")
-    tld = "." + parts[-1] if len(parts) >= 2 else ""
-    domain = ".".join(parts[-2:]) if len(parts) >= 2 else hostname
-    subdomains = parts[:-2] if len(parts) > 2 else []
+    import tldextract
+    
+    # Extract parts accurately using the public suffix list
+    ext = tldextract.extract(hostname)
+    tld = f".{ext.suffix}" if ext.suffix else ""
+    domain = f"{ext.domain}{tld}" if ext.domain else hostname
+    
+    # Keep the original array logic for subdomains if needed by other components
+    subdomain_str = ext.subdomain
+    subdomains = subdomain_str.split(".") if subdomain_str else []
 
     # Suspicious chars in full URL
     full_url = raw

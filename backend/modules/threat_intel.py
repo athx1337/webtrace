@@ -130,7 +130,7 @@ async def _urlhaus(domain: str) -> dict:
                 headers={"Auth-Key": URLHAUS_KEY} if URLHAUS_KEY else {},
             )
             data = r.json()
-            flagged = data.get("query_status") == "is_listed"
+            flagged = data.get("query_status") == "ok"
             urls = data.get("urls", []) or []
             return {
                 "available": True,
