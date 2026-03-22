@@ -163,19 +163,31 @@ const TopNav = () => (
   </nav>
 );
 
-const Footer = () => (
-  <footer className="bg-surface-container-lowest border-t border-outline-variant/10 px-6 py-2 flex justify-between items-center font-label text-[9px] uppercase tracking-widest text-on-surface/40 shrink-0 z-50 relative">
-    <div className="flex gap-4 items-center">
-      <span className="text-primary-container flex items-center gap-1">
-        <span className="w-1.5 h-1.5 rounded-full bg-primary-container animate-pulse"></span>
-        uplink_active
-      </span>
-      <span>node: la-04.sec.net</span>
-      <span>lat: 22ms</span>
-    </div>
-    <div>© 2026 WEBTRACE // CLASSIFIED_ACCESS_ONLY</div>
-  </footer>
-);
+const Footer = ({ serverStatus }: { serverStatus: 'checking' | 'waking' | 'awake' | 'offline' }) => {
+  const statusConfig = {
+    awake: { text: 'BACKEND: ONLINE', dotColor: 'bg-primary-container', textColor: 'text-primary-container', pulse: true },
+    waking: { text: 'BACKEND: BOOTING', dotColor: 'bg-yellow-400', textColor: 'text-yellow-400', pulse: true },
+    checking: { text: 'BACKEND: CONNECTING...', dotColor: 'bg-on-surface/50', textColor: 'text-on-surface/50', pulse: true },
+    offline: { text: 'BACKEND: OFFLINE', dotColor: 'bg-error', textColor: 'text-error', pulse: false }
+  };
+  const config = statusConfig[serverStatus] || statusConfig.checking;
+
+  return (
+    <footer className="bg-surface-container-lowest border-t border-outline-variant/10 px-6 py-2 flex justify-between items-center font-label text-[9px] uppercase tracking-widest text-on-surface/40 shrink-0 z-50 relative transition-colors duration-500">
+      <div className="flex gap-4 items-center">
+        <span className={`${config.textColor} flex items-center gap-1 font-bold tracking-widest transition-colors duration-500`}>
+          <span className={`w-1.5 h-1.5 rounded-full ${config.dotColor} ${config.pulse ? 'animate-pulse' : ''} transition-colors duration-500`}></span>
+          {config.text}
+        </span>
+        <span className="hidden sm:inline">node: hk-09.relay.net</span>
+        <span className={serverStatus === 'awake' ? 'text-primary-container/70' : 'text-on-surface/30'}>
+          ping: {serverStatus === 'awake' ? '18ms' : '--- '}
+        </span>
+      </div>
+      <div>© 2026 WEBTRACE // CLASSIFIED_ACCESS_ONLY</div>
+    </footer>
+  );
+};
 
 // ---------- Animation Variants ----------
 const staggerVariants = {
@@ -542,7 +554,7 @@ export default function App() {
                           </div>
                           <div className="max-h-36 overflow-y-auto pr-1 space-y-1">
                             {Object.entries(data.dns_records.records || {}).map(([type, records]) => {
-                              if (!records || records.length === 0) return null;
+                              if (!records || (records as string[]).length === 0) return null;
                               return (records as string[]).map((r, i) => (
                                 <div key={`${type}-${i}`} className="flex justify-between border-b border-white/5 py-1">
                                   <span className="text-primary-container/80 w-12 shrink-0">{type}</span>
@@ -740,7 +752,7 @@ export default function App() {
           )}
         </motion.main>
       </div>
-      <Footer />
+      <Footer serverStatus={serverStatus} />
     </div>
   );
 }
