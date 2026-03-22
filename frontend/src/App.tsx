@@ -156,9 +156,9 @@ interface AnalyzeResponse {
 
 // ---------- Static Components ----------
 const TopNav = () => (
-  <nav className="flex justify-between items-center w-full px-6 py-3 bg-surface-container-lowest font-label uppercase tracking-tighter border-b border-primary-container/20 shadow-[0_4px_10px_rgba(0,255,156,0.05)] z-50 shrink-0 relative">
-    <div className="text-2xl font-headline font-bold text-primary-container tracking-widest flex items-center gap-3">
-      <img src="/logo.png" alt="WEBTRACE" className="w-6 h-6 object-contain" style={{ filter: 'drop-shadow(0 0 8px rgba(0, 255, 156, 0.4))' }} /> WEBTRACE
+  <nav className="flex justify-between items-center w-full px-6 py-3 bg-surface-container-lowest border-b border-primary-container/20 shadow-[0_4px_10px_rgba(0,255,156,0.05)] z-50 shrink-0 relative">
+    <div className="flex items-center">
+      <img src="/navbar-logo.png" alt="WEBTRACE" className="h-8 md:h-10 w-auto object-contain" style={{ filter: 'drop-shadow(0 0 8px rgba(0, 255, 156, 0.4))' }} />
     </div>
   </nav>
 );
