@@ -1,16 +1,46 @@
+# Dependencies
 node_modules/
+.pnp
+.pnp.js
+
+# Build Outputs
 dist/
 build/
+coverage/
+
+# Environment Variables & Secrets
 .env
+.env.*
+!.env.example
+
+# Python
 __pycache__/
 *.pyc
 venv/
 env/
 .venv/
-.gemini/
+
+# Vercel & Cloudflare
+.vercel/
+.wrangler/
+
+# IDE, Agent & OS
 .agent/
 .agents/
+.gemini/
+.gsd/
 .vscode/
 .idea/
-*.log
 .DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Logs & Test Dumps
+*.log
+ts_error*.txt
+ts_errors*.txt
+test_output*.json
+*.tmp
