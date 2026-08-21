@@ -74,7 +74,7 @@ function normalizeUrl(raw: string) {
 		const last2 = parts.slice(-2).join('.');
 		const doubleSuffixes = [
 			'co.uk', 'org.uk', 'com.br', 'gov.br', 'com.au',
-			'net.au', 'co.in', 'org.in', 'net.in'
+			'net.au', 'co.in', 'org.in', 'net.in', 'gen.in', 'firm.in', 'ind.in'
 		];
 		if (doubleSuffixes.includes(last2) && parts.length >= 3) {
 			tld = '.' + last2;
@@ -135,7 +135,7 @@ async function queryDNS(name: string, type: string): Promise<string[]> {
 }
 
 function getPtrName(ip: string): string {
-	if (ip.includes(':')) return ''; // Basic IPv4 reverse lookup mapping
+	if (ip.includes(':')) return '';
 	return ip.split('.').reverse().join('.') + '.in-addr.arpa';
 }
 
@@ -202,7 +202,10 @@ async function addressLookup(hostname: string) {
 async function whoisDomain(domain: string) {
 	try {
 		const res = await fetch(`https://rdap.org/domain/${encodeURIComponent(domain)}`, {
-			headers: { 'Accept': 'application/json' },
+			headers: {
+				'Accept': 'application/json',
+				'User-Agent': 'WebTrace-OSINT/2.0 (Security-Recon-Tool)'
+			},
 			redirect: 'follow',
 		});
 		if (res.status !== 200) {
@@ -278,17 +281,21 @@ async function whoisDomain(domain: string) {
 
 async function whoisNetwork(ip: string) {
 	try {
-		const res = await fetch(`https://rdap.arin.net/registry/ip/${ip}`, {
-			headers: { 'Accept': 'application/json' },
+		// Use universal RDAP router to support ARIN, APNIC, RIPE, LACNIC, and AFRINIC
+		const res = await fetch(`https://rdap.org/ip/${encodeURIComponent(ip)}`, {
+			headers: {
+				'Accept': 'application/json',
+				'User-Agent': 'WebTrace-OSINT/2.0 (Security-Recon-Tool)'
+			},
 			redirect: 'follow',
 		});
-		if (!res.ok) return { available: false, error: `ARIN RDAP returned ${res.status}` };
+		if (!res.ok) return { available: false, error: `IP RDAP returned status ${res.status}` };
 		const data: any = await res.json();
 
 		const start = data.startAddress || '';
 		const end = data.endAddress || '';
 		const cidr = data.cidr0_cidrs?.[0] || {};
-		const cidr_str = `${cidr.v4prefix || cidr.v6prefix || ''}/${cidr.length || ''}`;
+		const cidr_str = cidr.v4prefix ? `${cidr.v4prefix}/${cidr.length}` : (data.handle || '');
 
 		const net_name = data.name || '';
 		const net_type = data.type || '';
@@ -320,10 +327,10 @@ async function whoisNetwork(ip: string) {
 			available: true,
 			ip,
 			network: cidr_str,
-			range: `${start} - ${end}`,
+			range: start && end ? `${start} - ${end}` : (data.handle || 'Unknown'),
 			net_name,
 			net_type,
-			org: org_name || 'Unknown',
+			org: org_name || data.name || 'Unknown',
 			country,
 			asn,
 			abuse_email,
@@ -399,7 +406,10 @@ async function dnsRecords(domain: string) {
 async function sslAnalysis(domain: string) {
 	try {
 		const res = await fetch(
-			`https://api.certspotter.com/v1/issuances?domain=${encodeURIComponent(domain)}&limit=1&expand=issuer&expand=dns_names`
+			`https://api.certspotter.com/v1/issuances?domain=${encodeURIComponent(domain)}&limit=1&expand=issuer&expand=dns_names`,
+			{
+				headers: { 'User-Agent': 'WebTrace-OSINT/2.0' }
+			}
 		);
 		if (!res.ok) {
 			return { available: false, error: `CertSpotter returned status ${res.status}` };
@@ -495,7 +505,9 @@ async function sslAnalysis(domain: string) {
 async function infrastructureScan(ip: string) {
 	if (!ip) return { available: false, reason: 'No IP provided' };
 	try {
-		const res = await fetch(`https://internetdb.shodan.io/${ip}`);
+		const res = await fetch(`https://internetdb.shodan.io/${ip}`, {
+			headers: { 'User-Agent': 'WebTrace-OSINT/2.0' }
+		});
 		if (res.status === 404) {
 			return {
 				available: true,
@@ -551,7 +563,10 @@ async function infrastructureScan(ip: string) {
 async function subdomains(domain: string) {
 	try {
 		const res = await fetch(`https://crt.sh/?q=%.${domain}&output=json`, {
-			headers: { 'Accept': 'application/json' },
+			headers: {
+				'Accept': 'application/json',
+				'User-Agent': 'WebTrace-OSINT/2.0'
+			},
 		});
 		if (!res.ok) return { available: false, error: `crt.sh returned status ${res.status}` };
 		const data: any = await res.json();
@@ -611,7 +626,7 @@ async function threatIntel(domain: string, ip?: string, keys: Record<string, str
 
 	const otxPromise = (async () => {
 		try {
-			const headers: Record<string, string> = {};
+			const headers: Record<string, string> = { 'User-Agent': 'WebTrace-OSINT/2.0' };
 			if (otxKey) headers['X-OTX-API-KEY'] = otxKey;
 			const res = await fetch(`https://otx.alienvault.com/api/v1/indicators/domain/${domain}/general`, { headers });
 			if (!res.ok) return { available: false, flagged: false };
@@ -639,7 +654,7 @@ async function threatIntel(domain: string, ip?: string, keys: Record<string, str
 		try {
 			const res = await fetch(
 				`https://api.abuseipdb.com/api/v2/check?ipAddress=${encodeURIComponent(ip)}&maxAgeInDays=90&verbose=true`,
-				{ headers: { 'Key': abuseipdbKey, 'Accept': 'application/json' } }
+				{ headers: { 'Key': abuseipdbKey, 'Accept': 'application/json', 'User-Agent': 'WebTrace-OSINT/2.0' } }
 			);
 			if (!res.ok) return { available: false, flagged: false };
 			const body: any = await res.json();
@@ -664,7 +679,10 @@ async function threatIntel(domain: string, ip?: string, keys: Record<string, str
 		try {
 			const res = await fetch('https://threatfox-api.abuse.ch/api/v1/', {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
+				headers: {
+					'Content-Type': 'application/json',
+					'User-Agent': 'WebTrace-OSINT/2.0'
+				},
 				body: JSON.stringify({ query: 'search_ioc', search_term: domain }),
 			});
 			if (!res.ok) return { available: false, flagged: false };
@@ -686,7 +704,7 @@ async function threatIntel(domain: string, ip?: string, keys: Record<string, str
 	const greynoisePromise = (async () => {
 		if (!ip) return { available: false, flagged: false };
 		try {
-			const headers: Record<string, string> = {};
+			const headers: Record<string, string> = { 'User-Agent': 'WebTrace-OSINT/2.0' };
 			if (greynoiseKey) headers['key'] = greynoiseKey;
 			const res = await fetch(`https://api.greynoise.io/v3/community/${ip}`, { headers });
 			if (res.status === 404) {
@@ -711,7 +729,7 @@ async function threatIntel(domain: string, ip?: string, keys: Record<string, str
 		try {
 			const body = new URLSearchParams();
 			body.append('host', domain);
-			const headers: Record<string, string> = {};
+			const headers: Record<string, string> = { 'User-Agent': 'WebTrace-OSINT/2.0' };
 			if (urlhausKey) headers['Auth-Key'] = urlhausKey;
 			const res = await fetch('https://urlhaus-api.abuse.ch/v1/host/', {
 				method: 'POST',
@@ -759,7 +777,9 @@ async function threatIntel(domain: string, ip?: string, keys: Record<string, str
 async function historicalLookup(domain: string, viewDnsKey?: string) {
 	const waybackPromise = (async () => {
 		try {
-			const res = await fetch(`http://archive.org/wayback/available?url=${encodeURIComponent(domain)}`);
+			const res = await fetch(`https://archive.org/wayback/available?url=${encodeURIComponent(domain)}`, {
+				headers: { 'User-Agent': 'WebTrace-OSINT/2.0' }
+			});
 			if (!res.ok) return { available: false };
 			const data: any = await res.json();
 			const snapshot = data.archived_snapshots?.closest || {};
@@ -768,7 +788,8 @@ async function historicalLookup(domain: string, viewDnsKey?: string) {
 			let count: number | null = null;
 			try {
 				const cdxCountRes = await fetch(
-					`http://web.archive.org/cdx/search/cdx?url=${encodeURIComponent(domain)}&output=json&limit=0&showNumPages=true`
+					`https://web.archive.org/cdx/search/cdx?url=${encodeURIComponent(domain)}&output=json&limit=0&showNumPages=true`,
+					{ headers: { 'User-Agent': 'WebTrace-OSINT/2.0' } }
 				);
 				if (cdxCountRes.ok) {
 					const txt = await cdxCountRes.text();
@@ -793,7 +814,8 @@ async function historicalLookup(domain: string, viewDnsKey?: string) {
 		if (!viewDnsKey) return { available: false, reason: 'VIEWDNS_KEY not set' };
 		try {
 			const res = await fetch(
-				`https://api.viewdns.info/iphistory/?domain=${encodeURIComponent(domain)}&apikey=${viewDnsKey}&output=json`
+				`https://api.viewdns.info/iphistory/?domain=${encodeURIComponent(domain)}&apikey=${viewDnsKey}&output=json`,
+				{ headers: { 'User-Agent': 'WebTrace-OSINT/2.0' } }
 			);
 			if (!res.ok) return { available: false };
 			const data: any = await res.json();
@@ -818,19 +840,19 @@ async function historicalLookup(domain: string, viewDnsKey?: string) {
 
 async function generateExplanation(scan: any, geminiKey?: string) {
 	if (!geminiKey) return { available: false, error: 'GEMINI_API_KEY not set' };
-	try {
-		const domain = scan.domain || 'unknown';
-		const addr = scan.address_lookup || {};
-		const whois = scan.whois_domain || {};
-		const net = scan.whois_network || {};
-		const ssl = scan.ssl || {};
-		const infra = scan.infrastructure || {};
-		const threat = scan.threat_intel || {};
-		const subs = scan.subdomains || {};
-		const hist = scan.historical || {};
-		const dns = scan.dns_records || {};
 
-		const prompt = `You are a senior cybersecurity analyst writing a brief for a security researcher.
+	const domain = scan.domain || 'unknown';
+	const addr = scan.address_lookup || {};
+	const whois = scan.whois_domain || {};
+	const net = scan.whois_network || {};
+	const ssl = scan.ssl || {};
+	const infra = scan.infrastructure || {};
+	const threat = scan.threat_intel || {};
+	const subs = scan.subdomains || {};
+	const hist = scan.historical || {};
+	const dns = scan.dns_records || {};
+
+	const prompt = `You are a senior cybersecurity analyst writing a brief for a security researcher.
 Based on the structured scan data below, write a 3-4 sentence technical summary.
 Be specific — mention actual findings (CDN, CVEs, threat intel hits, cert age, subdomain count, domain age).
 Do not use bullet points. Do not be vague. Treat the researcher as an expert.
@@ -850,28 +872,38 @@ DNS Flags: ${JSON.stringify(dns.flags || [])}
 Subdomains Found: ${subs.total || 0} | Notable: ${JSON.stringify(subs.notable || [])}
 Wayback Available: ${hist.wayback?.available || false} | Snapshots: ${hist.wayback?.snapshot_count || 0}`;
 
-		const res = await fetch(
-			`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
-			{
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					contents: [{ parts: [{ text: prompt }] }],
-				}),
-			}
-		);
-		if (!res.ok) return { available: false, error: `Gemini API returned status ${res.status}` };
-		const data: any = await res.json();
-		const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+	// Fallback models in case of 503 capacity overload
+	const models = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-flash-latest', 'gemini-3.5-flash'];
 
-		return {
-			available: true,
-			summary: text,
-			engine: 'gemini-2.5-flash',
-		};
-	} catch (err: any) {
-		return { available: false, error: err.message };
+	for (const model of models) {
+		try {
+			const res = await fetch(
+				`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`,
+				{
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						contents: [{ parts: [{ text: prompt }] }],
+					}),
+				}
+			);
+			if (res.ok) {
+				const data: any = await res.json();
+				const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+				if (text) {
+					return {
+						available: true,
+						summary: text,
+						engine: model,
+					};
+				}
+			}
+		} catch {
+			// Continue to next fallback model
+		}
 	}
+
+	return { available: false, error: 'AI summary generation temporarily unavailable' };
 }
 
 // --- Endpoints ---

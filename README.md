@@ -12,7 +12,7 @@
 
 **Real-time OSINT Domain Intelligence & Attack Surface Analyzer.**
 
-[🌐 **Live Demo (Frontend)**](https://frontend-theta-seven-61.vercel.app) • [⚡ **Edge API (Worker)**](https://webtrace.phish-x.workers.dev)
+[🌐 **Live Demo (Frontend)**](https://webtrace-lyart.vercel.app) • [⚡ **Edge API (Worker)**](https://webtrace.phish-x.workers.dev)
 
 </div>
 
@@ -24,7 +24,7 @@
 
 ### 🌐 Live URLs
 
-- **Frontend App (Vercel):** [https://frontend-theta-seven-61.vercel.app](https://frontend-theta-seven-61.vercel.app)
+- **Frontend App (Vercel):** [https://webtrace-lyart.vercel.app](https://webtrace-lyart.vercel.app)
 - **API Endpoint (Cloudflare Worker):** [https://webtrace.phish-x.workers.dev/api/analyze](https://webtrace.phish-x.workers.dev/api/analyze)
 
 ---
