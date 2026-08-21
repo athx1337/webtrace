@@ -27,10 +27,13 @@ import {
   ShieldCheck,
   ShieldX,
   ExternalLink,
-  Camera,
-  RefreshCw,
-  Sparkles,
-  GitCompare
+  ChevronDown,
+  ChevronUp,
+  Cpu,
+  Mail,
+  Lock,
+  GitCompare,
+  Clock
 } from 'lucide-react';
 
 // ---------- Interfaces ----------
@@ -159,11 +162,11 @@ interface AnalyzeResponse {
     verdict?: string;
     flagged_by?: number;
     engines?: {
-      otx?: { available: boolean; pulse_count: number; malware_families: string[]; tags: string[]; flagged: boolean };
-      abuseipdb?: { available: boolean; abuse_score: number; total_reports: number; last_reported: string; is_tor: boolean; usage_type: string; isp: string; flagged: boolean };
-      threatfox?: { available: boolean; flagged: boolean; ioc_count?: number; threat_types?: string[]; malware?: string[] };
-      greynoise?: { available: boolean; noise: boolean; riot: boolean; classification: string; name: string; flagged: boolean };
-      urlhaus?: { available: boolean; flagged: boolean; url_count: number; tags: string[] };
+      otx?: { available: boolean; pulse_count: number; malware_families: string[]; tags: string[]; flagged: boolean; error?: string };
+      abuseipdb?: { available: boolean; abuse_score: number; total_reports: number; last_reported: string; is_tor: boolean; usage_type: string; isp: string; flagged: boolean; error?: string };
+      threatfox?: { available: boolean; flagged: boolean; ioc_count?: number; threat_types?: string[]; malware?: string[]; error?: string };
+      greynoise?: { available: boolean; noise: boolean; riot: boolean; classification: string; name: string; flagged: boolean; error?: string };
+      urlhaus?: { available: boolean; flagged: boolean; url_count: number; tags: string[]; error?: string };
     };
     error?: string;
   };
@@ -176,6 +179,7 @@ interface AnalyzeResponse {
       closest_url?: string | null;
       snapshot_count?: number | null;
       flag?: string | null;
+      error?: string;
     };
     passive_dns?: Array<{
       ip: string;
@@ -237,13 +241,13 @@ function computeRiskScore(data: AnalyzeResponse) {
   if (openSensitive.length > 0) {
     const deduction = Math.min(openSensitive.length * 5, 20);
     score -= deduction;
-    penalties.push({ reason: `Exposed ports (${openSensitive.join(', ')})`, deduction });
+    penalties.push({ reason: `Exposed legacy/database ports (${openSensitive.join(', ')})`, deduction });
   }
 
   // SSL Issues
   if (data.ssl?.available && !data.ssl.valid) {
     score -= 20;
-    penalties.push({ reason: 'Invalid or missing SSL certificate', deduction: 20 });
+    penalties.push({ reason: 'Invalid or untrusted SSL certificate', deduction: 20 });
   } else if (data.ssl?.days_remaining && data.ssl.days_remaining < 14) {
     score -= 10;
     penalties.push({ reason: 'SSL certificate expiring soon', deduction: 10 });
@@ -294,6 +298,21 @@ function computeRiskScore(data: AnalyzeResponse) {
 
   return { score, label, color, border, bg, penalties };
 }
+
+// ---------- Unified Status Badge Component ----------
+const StatusBadge = ({ status, label }: { status: 'pass' | 'fail' | 'warn' | 'unavailable'; label: string }) => {
+  if (status === 'pass') {
+    return <span className="px-2 py-0.5 bg-primary-container/10 border border-primary-container/30 text-primary-container text-[10px] font-mono font-bold tracking-wider">✓ {label}</span>;
+  }
+  if (status === 'warn') {
+    return <span className="px-2 py-0.5 bg-yellow-400/10 border border-yellow-400/30 text-yellow-400 text-[10px] font-mono font-bold tracking-wider">⚠ {label}</span>;
+  }
+  if (status === 'fail') {
+    return <span className="px-2 py-0.5 bg-error/10 border border-error/30 text-error text-[10px] font-mono font-bold tracking-wider">✗ {label}</span>;
+  }
+  // Neutral Gray for graceful degradation / service unavailable
+  return <span className="px-2 py-0.5 bg-surface-container-high border border-outline-variant/30 text-on-surface/40 text-[10px] font-mono tracking-wider">⚪ {label}</span>;
+};
 
 // ---------- Copy Button Helper ----------
 const CopyBtn = ({ text, title }: { text?: string | null; title?: string }) => {
@@ -389,8 +408,8 @@ const Footer = ({
   );
 };
 
-const SectionHeader = ({ title, icon: Icon, error = false, badge }: { title: string; icon: any; error?: boolean; badge?: string }) => (
-  <div className={`flex items-center justify-between mb-4 font-label ${error ? 'text-error/80' : 'text-primary-container'}`}>
+const SectionHeader = ({ title, icon: Icon, badge }: { title: string; icon: any; badge?: string }) => (
+  <div className="flex items-center justify-between mb-4 font-label text-primary-container">
     <div className="flex items-center gap-2">
       <Icon className="w-4 h-4" />
       <h3 className="text-xs md:text-sm font-bold tracking-widest uppercase">{title}</h3>
@@ -418,7 +437,7 @@ const TopologyModal = ({ data, onClose }: { data: AnalyzeResponse; onClose: () =
           <div className="flex items-center gap-2 text-primary-container font-label text-sm uppercase tracking-widest font-bold">
             <Network className="w-5 h-5" /> Attack Surface Topology Map: {data.domain}
           </div>
-          <button onClick={onClose} className="text-on-surface/60 hover:text-primary-container">
+          <button onClick={onClose} className="text-on-surface/60 hover:text-primary-container cursor-pointer">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -466,7 +485,7 @@ const TopologyModal = ({ data, onClose }: { data: AnalyzeResponse; onClose: () =
                   Open Ports: <span className="text-primary-container">{data.infrastructure?.ports?.join(', ') || 'None'}</span>
                 </div>
                 <div className="text-on-surface/70">
-                  CVEs: <span className="text-error">{data.infrastructure?.vulns?.length || 0} Detected</span>
+                  CVEs: <span className="text-error font-bold">{data.infrastructure?.vulns?.length || 0} Detected</span>
                 </div>
                 {data.address_lookup?.cdn_detected && (
                   <div className="text-yellow-400 text-[10px]">
@@ -485,7 +504,7 @@ const TopologyModal = ({ data, onClose }: { data: AnalyzeResponse; onClose: () =
                 <div>Verdict: <span className="font-bold text-primary-container">{data.threat_intel?.verdict || 'CLEAN'}</span></div>
                 <div>Subdomains: <span className="text-on-surface">{data.subdomains?.total || 0} Total</span></div>
                 <div>Active Probed: <span className="text-primary-container">{data.subdomains?.active_probed || 0}</span></div>
-                <div>High-Risk Endpoints: <span className="text-error">{data.subdomains?.notable?.length || 0}</span></div>
+                <div>High-Risk Endpoints: <span className="text-error font-bold">{data.subdomains?.notable?.length || 0}</span></div>
               </div>
             </div>
           </div>
@@ -560,8 +579,8 @@ export default function App() {
   const [legalModal, setLegalModal] = useState<'privacy' | 'terms' | null>(null);
   const [showTopology, setShowTopology] = useState(false);
   const [showRawJson, setShowRawJson] = useState(false);
+  const [expandAllCves, setExpandAllCves] = useState(false);
   const [subdomainSearch, setSubdomainSearch] = useState("");
-  const [subdomainFilter, setSubdomainFilter] = useState<'all' | 'notable'>('all');
   const [scanHistory, setScanHistory] = useState<string[]>([]);
   const [scanDiffAlert, setScanDiffAlert] = useState<string[]>([]);
 
@@ -638,6 +657,7 @@ export default function App() {
     setErrorMsg("");
     setData(null);
     setScanDiffAlert([]);
+    setExpandAllCves(false);
 
     const apiUrl = import.meta.env.VITE_API_URL || 'https://webtrace.phish-x.workers.dev';
 
@@ -698,16 +718,11 @@ ${data.ai_explanation?.summary || 'N/A'}
 - X-Frame-Options: ${data.tech_stack?.security_headers?.x_frame_options?.present ? 'CONFIGURED' : 'MISSING'}
 
 ================================================================================
-4. 📜 REGISTRY (WHOIS) & HYGIENE
+4. 📧 EMAIL SECURITY & AUTHENTICATION
 ================================================================================
-- Registrar: ${data.whois_domain?.registrar || 'Unknown'}
-- Domain Age: ${data.whois_domain?.age_days || 'Unknown'} days
-- Registration Date: ${data.whois_domain?.created || 'N/A'}
-- Expiration Date: ${data.whois_domain?.expires || 'N/A'}
-- DNSSEC Status: ${data.whois_domain?.dnssec || 'UNSIGNED'}
-- SPF Record: ${data.dns_records?.has_spf ? 'CONFIGURED' : 'MISSING'}
+- SPF Policy: ${data.dns_records?.has_spf ? 'CONFIGURED' : 'MISSING'}
 - DMARC Policy: ${data.dns_records?.has_dmarc ? 'CONFIGURED' : 'MISSING'}
-- DKIM Found: ${data.dns_records?.dkim_found ? 'CONFIGURED' : 'MISSING'}
+- DKIM Selectors: ${data.dns_records?.dkim_found ? 'CONFIGURED' : 'MISSING'}
 
 ================================================================================
 5. 🎯 ATTACK SURFACE EXPOSURE & CVES
@@ -740,15 +755,12 @@ ${data.ai_explanation?.summary || 'N/A'}
   const filteredSubdomains = useMemo(() => {
     if (!data?.subdomains?.subdomains) return [];
     let list = data.subdomains.subdomains;
-    if (subdomainFilter === 'notable' && data.subdomains.notable) {
-      list = list.filter(s => data.subdomains.notable?.includes(s.subdomain));
-    }
     if (subdomainSearch.trim()) {
       const q = subdomainSearch.toLowerCase().trim();
       list = list.filter(s => s.subdomain.toLowerCase().includes(q) || s.issuer.toLowerCase().includes(q));
     }
     return list;
-  }, [data, subdomainSearch, subdomainFilter]);
+  }, [data, subdomainSearch]);
 
   const PRESET_TARGETS = ['google.com', 'github.com', 'cloudflare.com', 'ktiwari.in', 'wikipedia.org'];
 
@@ -859,8 +871,8 @@ ${data.ai_explanation?.summary || 'N/A'}
                   <div className="w-16 h-16 border border-primary-container/40 rounded-full absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-ping opacity-25"></div>
                   <Activity className="w-8 h-8 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-90" />
                 </div>
-                <div className="mt-8 font-label text-sm uppercase tracking-[0.3em] animate-pulse">Running Active DoH Probing & OSINT Feeds...</div>
-                <div className="mt-2 font-mono text-[10px] text-on-surface/40">Querying DNS, RDAP, Tech Stack, Shodan, crt.sh, OTX & Gemini Edge</div>
+                <div className="mt-8 font-label text-sm uppercase tracking-[0.3em] animate-pulse">Executing Reconnaissance & Active DoH Probing...</div>
+                <div className="mt-2 font-mono text-[10px] text-on-surface/40">Querying DNS, RDAP, Shodan, Threat Feeds, Subdomains & Security AI</div>
               </motion.div>
             )}
           </AnimatePresence>
@@ -976,75 +988,105 @@ ${data.ai_explanation?.summary || 'N/A'}
                   </div>
                   <SectionHeader title="Structured AI Pentest Briefing" icon={Brain} badge={data.ai_explanation.engine || 'AI Engine'} />
                   <div className="font-body text-xs md:text-sm text-on-surface leading-relaxed relative z-10 space-y-3 whitespace-pre-line border-l-2 border-primary-container/50 pl-4 py-1">
-                    {data.ai_explanation.available
-                      ? data.ai_explanation.summary
-                      : <span className="text-error">{data.ai_explanation.error || "AI Intel Unavailable"}</span>}
+                    {data.ai_explanation.available ? (
+                      data.ai_explanation.summary
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <StatusBadge status="unavailable" label="AI BRIEFING UNAVAILABLE" />
+                      </div>
+                    )}
                   </div>
                 </motion.div>
               )}
 
-              {/* Tech Stack & Security Headers */}
-              {data.tech_stack?.available && (
-                <motion.div variants={fadeUpBlock} className="bg-surface-container-lowest border border-outline-variant p-6">
-                  <SectionHeader title="Tech Stack & Security Headers Audit" icon={Cpu} />
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 font-mono text-xs">
-                    {/* Technologies Detected */}
-                    <div>
-                      <div className="text-[10px] font-label text-primary-container uppercase border-b border-primary-container/20 pb-1 mb-3">
-                        Identified Technologies & Servers
+              {/* ── Flagship: Active Subdomains Discovery Panel ── */}
+              <motion.div variants={fadeUpBlock} className="bg-surface-container-lowest border border-outline-variant p-6">
+                <SectionHeader
+                  title="Subdomain Reconnaissance (Active DoH Probe + CT Logs)"
+                  icon={Network}
+                  badge={`${data.subdomains?.total ?? 0} Subdomains Tracked`}
+                />
+
+                {data.subdomains?.available ? (
+                  <div className="space-y-4">
+                    {/* Header stats & filter */}
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-outline/20 pb-3">
+                      <div className="flex items-center gap-4 text-xs font-mono">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-on-surface/50">Active Probed:</span>
+                          <span className="text-primary-container font-bold">{data.subdomains.active_probed ?? 0}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-on-surface/50">High-Value Endpoints:</span>
+                          <span className="text-error font-bold">{data.subdomains.notable?.length ?? 0}</span>
+                        </div>
                       </div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {data.tech_stack.tech_stack && data.tech_stack.tech_stack.length > 0 ? (
-                          data.tech_stack.tech_stack.map((t, i) => (
-                            <span key={i} className="px-2 py-0.5 bg-primary-container/10 border border-primary-container/30 text-primary-container text-[11px]">
-                              {t}
-                            </span>
-                          ))
-                        ) : (
-                          <span className="text-on-surface/40">No specific framework signatures matched</span>
+
+                      {/* Search box */}
+                      <div className="flex items-center gap-1.5 bg-surface-container px-3 py-1 border border-outline/20 w-full sm:w-64">
+                        <Search className="w-3.5 h-3.5 text-on-surface/40" />
+                        <input
+                          type="text"
+                          value={subdomainSearch}
+                          onChange={(e) => setSubdomainSearch(e.target.value)}
+                          placeholder="SEARCH SUBDOMAINS..."
+                          className="bg-transparent border-none outline-none text-[11px] w-full text-on-surface font-mono uppercase"
+                        />
+                        {subdomainSearch && (
+                          <button onClick={() => setSubdomainSearch("")} className="text-on-surface/40 hover:text-primary-container">
+                            <X className="w-3 h-3" />
+                          </button>
                         )}
                       </div>
                     </div>
 
-                    {/* Security Headers */}
-                    <div>
-                      <div className="text-[10px] font-label text-primary-container uppercase border-b border-primary-container/20 pb-1 mb-3">
-                        Security Headers Compliance
-                      </div>
-                      <div className="grid grid-cols-2 gap-2 text-[11px]">
-                        <div className="flex items-center justify-between border-b border-white/5 pb-1">
-                          <span className="text-on-surface/60">HSTS (HTTPS):</span>
-                          <span className={data.tech_stack.security_headers?.hsts?.present ? "text-primary-container font-bold" : "text-error"}>
-                            {data.tech_stack.security_headers?.hsts?.present ? "✓ ENFORCED" : "✗ MISSING"}
-                          </span>
+                    {/* Subdomains Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5 max-h-56 overflow-y-auto pr-1 font-mono text-xs">
+                      {filteredSubdomains.length > 0 ? (
+                        filteredSubdomains.map((sub, i) => {
+                          const isHighValue = data.subdomains?.notable?.includes(sub.subdomain);
+                          const isActive = sub.source === 'ACTIVE_DOH';
+
+                          return (
+                            <div
+                              key={i}
+                              className={`p-2.5 border flex items-center justify-between transition-colors ${isHighValue ? 'bg-error/5 border-error/30' : 'bg-surface-container border-outline/10 hover:border-primary-container/30'}`}
+                            >
+                              <div className="truncate max-w-[80%]">
+                                <div className="flex items-center gap-1.5 mb-1">
+                                  {isActive ? (
+                                    <span className="text-[8px] bg-primary-container/20 text-primary-container px-1 py-0.2 border border-primary-container/40">ACTIVE_DOH</span>
+                                  ) : (
+                                    <span className="text-[8px] bg-surface-container-high text-on-surface/50 px-1 py-0.2">CT_LOG</span>
+                                  )}
+                                  {isHighValue && (
+                                    <span className="text-[8px] bg-error/20 text-error px-1 py-0.2 border border-error/40">HIGH_VALUE</span>
+                                  )}
+                                </div>
+                                <div className="text-on-surface font-medium truncate text-[11px]">{sub.subdomain}</div>
+                              </div>
+                              <CopyBtn text={sub.subdomain} />
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <div className="col-span-full py-4 text-center text-on-surface/40 font-mono text-xs">
+                          No subdomains matched filter
                         </div>
-                        <div className="flex items-center justify-between border-b border-white/5 pb-1">
-                          <span className="text-on-surface/60">CSP (XSS Def):</span>
-                          <span className={data.tech_stack.security_headers?.csp?.present ? "text-primary-container font-bold" : "text-error"}>
-                            {data.tech_stack.security_headers?.csp?.present ? "✓ CONFIGURED" : "✗ MISSING"}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between border-b border-white/5 pb-1">
-                          <span className="text-on-surface/60">X-Frame-Options:</span>
-                          <span className={data.tech_stack.security_headers?.x_frame_options?.present ? "text-primary-container font-bold" : "text-error"}>
-                            {data.tech_stack.security_headers?.x_frame_options?.present ? "✓ CONFIGURED" : "✗ MISSING"}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between border-b border-white/5 pb-1">
-                          <span className="text-on-surface/60">X-Content-Type:</span>
-                          <span className={data.tech_stack.security_headers?.x_content_type_options?.present ? "text-primary-container font-bold" : "text-error"}>
-                            {data.tech_stack.security_headers?.x_content_type_options?.present ? "✓ CONFIGURED" : "✗ MISSING"}
-                          </span>
-                        </div>
-                      </div>
+                      )}
                     </div>
                   </div>
-                </motion.div>
-              )}
+                ) : (
+                  <div className="flex items-center gap-2 py-2 font-mono text-xs">
+                    <StatusBadge status="unavailable" label="SUBDOMAIN SERVICE UNAVAILABLE" />
+                    <span className="text-on-surface/40 text-[11px]">Upstream CT log provider rate-limited or degraded</span>
+                  </div>
+                )}
+              </motion.div>
 
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
 
-                {/* ── Column 1 ── */}
+                {/* ── Column 1: Network & Domain Identity ── */}
                 <div className="flex flex-col gap-6">
 
                   {/* Network Identity */}
@@ -1079,7 +1121,7 @@ ${data.ai_explanation?.summary || 'N/A'}
                           )}
                         </div>
                       ) : (
-                        <div className="text-xs text-error font-mono">{data.address_lookup?.error || "UNAVAILABLE"}</div>
+                        <StatusBadge status="unavailable" label="ADDRESS LOOKUP UNAVAILABLE" />
                       )}
                     </div>
 
@@ -1105,7 +1147,7 @@ ${data.ai_explanation?.summary || 'N/A'}
                           </span>
                         </div>
                       ) : (
-                        <div className="text-xs text-error font-mono">{data.whois_domain?.error || "UNAVAILABLE"}</div>
+                        <StatusBadge status="unavailable" label="WHOIS REGISTRY UNAVAILABLE" />
                       )}
                     </div>
 
@@ -1127,16 +1169,16 @@ ${data.ai_explanation?.summary || 'N/A'}
                           <span className="text-right">{data.whois_network.country || 'N/A'}</span>
                         </div>
                       ) : (
-                        <div className="text-xs text-on-surface/40 font-mono italic">No network routing intel fetched.</div>
+                        <StatusBadge status="unavailable" label="NETWORK WHOIS UNAVAILABLE" />
                       )}
                     </div>
                   </motion.div>
 
-                  {/* Cryptographic Ledger (SSL & DNS) */}
+                  {/* Cryptographic Ledger & Email Security */}
                   <motion.div variants={fadeUpBlock} className="bg-surface-container-lowest border border-outline-variant p-6 flex flex-col gap-6">
-                    <SectionHeader title="Cryptographic & DNS Ledger" icon={Database} />
+                    <SectionHeader title="Cryptographic & Email Posture" icon={Database} />
 
-                    {/* SSL */}
+                    {/* SSL / TLS */}
                     <div>
                       <div className="text-[10px] font-label text-primary-container uppercase border-b border-primary-container/20 pb-1 mb-3">X.509 Certificate Profile</div>
                       {data.ssl?.available ? (
@@ -1160,55 +1202,76 @@ ${data.ai_explanation?.summary || 'N/A'}
                           <span className="text-right opacity-80">{data.ssl.san_count ?? data.ssl.sans?.length ?? 0} Domains</span>
                         </div>
                       ) : (
-                        <div className="text-xs text-error font-mono">{data.ssl?.error || "UNAVAILABLE"}</div>
+                        <StatusBadge status="unavailable" label="CERTIFICATE LOGS UNAVAILABLE" />
                       )}
                     </div>
 
-                    {/* DNS Records */}
+                    {/* Dedicated Email Security & Authentication Table */}
                     <div>
-                      <div className="text-[10px] font-label text-primary-container uppercase border-b border-primary-container/20 pb-1 mb-3">Authoritative DNS</div>
+                      <div className="text-[10px] font-label text-primary-container uppercase border-b border-primary-container/20 pb-1 mb-3 flex items-center gap-1.5">
+                        <Mail className="w-3.5 h-3.5" /> Email Security & Spoofing Defense
+                      </div>
                       {data.dns_records?.available ? (
                         <div className="space-y-2 text-xs font-mono uppercase">
-                          <div className="grid grid-cols-3 gap-2 mb-3 bg-surface-container p-2 text-center text-[10px] border border-outline/20">
-                            <div className={data.dns_records.has_spf ? "text-primary-container font-bold" : "text-error"}>
-                              SPF {data.dns_records.has_spf ? '✓ OK' : '✗ MISSING'}
+                          <div className="flex items-center justify-between p-2 bg-surface-container border border-outline/10">
+                            <div>
+                              <span className="text-on-surface/80 font-bold block text-[11px]">SPF Record</span>
+                              <span className="text-[9px] text-on-surface/40">Sender Policy Framework validation</span>
                             </div>
-                            <div className={data.dns_records.has_dmarc ? "text-primary-container font-bold" : "text-error"}>
-                              DMARC {data.dns_records.has_dmarc ? '✓ OK' : '✗ MISSING'}
-                            </div>
-                            <div className={data.dns_records.dkim_found ? "text-primary-container font-bold" : "text-error"}>
-                              DKIM {data.dns_records.dkim_found ? '✓ OK' : '✗ MISSING'}
-                            </div>
+                            <StatusBadge status={data.dns_records.has_spf ? 'pass' : 'fail'} label={data.dns_records.has_spf ? 'CONFIGURED' : 'MISSING'} />
                           </div>
-                          <div className="max-h-36 overflow-y-auto pr-1 space-y-1">
-                            {Object.entries(data.dns_records.records || {}).map(([type, records]) => {
-                              if (!records || (records as string[]).length === 0) return null;
-                              return (records as string[]).map((r, i) => (
-                                <div key={`${type}-${i}`} className="flex justify-between border-b border-white/5 py-1">
-                                  <span className="text-primary-container/80 w-12 shrink-0 font-bold">{type}</span>
-                                  <span className="text-right truncate text-on-surface/80 pl-2 text-[10px]">{r}</span>
-                                </div>
-                              ));
-                            })}
+
+                          <div className="flex items-center justify-between p-2 bg-surface-container border border-outline/10">
+                            <div>
+                              <span className="text-on-surface/80 font-bold block text-[11px]">DMARC Policy</span>
+                              <span className="text-[9px] text-on-surface/40">Domain-based Message Authentication</span>
+                            </div>
+                            <StatusBadge status={data.dns_records.has_dmarc ? 'pass' : 'fail'} label={data.dns_records.has_dmarc ? 'CONFIGURED' : 'MISSING'} />
+                          </div>
+
+                          <div className="flex items-center justify-between p-2 bg-surface-container border border-outline/10">
+                            <div>
+                              <span className="text-on-surface/80 font-bold block text-[11px]">DKIM Selector</span>
+                              <span className="text-[9px] text-on-surface/40">DomainKeys Identified Mail</span>
+                            </div>
+                            <StatusBadge status={data.dns_records.dkim_found ? 'pass' : 'fail'} label={data.dns_records.dkim_found ? 'FOUND' : 'MISSING'} />
                           </div>
                         </div>
                       ) : (
-                        <div className="text-xs text-error font-mono">{data.dns_records?.error || "UNAVAILABLE"}</div>
+                        <StatusBadge status="unavailable" label="EMAIL POSTURE UNAVAILABLE" />
+                      )}
+                    </div>
+
+                    {/* Authoritative DNS Records List */}
+                    <div>
+                      <div className="text-[10px] font-label text-primary-container uppercase border-b border-primary-container/20 pb-1 mb-3">
+                        Authoritative DNS Record Ledger
+                      </div>
+                      {data.dns_records?.available ? (
+                        <div className="max-h-36 overflow-y-auto pr-1 space-y-1 font-mono text-xs">
+                          {Object.entries(data.dns_records.records || {}).map(([type, records]) => {
+                            if (!records || (records as string[]).length === 0) return null;
+                            return (records as string[]).map((r, i) => (
+                              <div key={`${type}-${i}`} className="flex justify-between border-b border-white/5 py-1">
+                                <span className="text-primary-container/80 w-12 shrink-0 font-bold">{type}</span>
+                                <span className="text-right truncate text-on-surface/80 pl-2 text-[10px]">{r}</span>
+                              </div>
+                            ));
+                          })}
+                        </div>
+                      ) : (
+                        <StatusBadge status="unavailable" label="DNS RECORDS UNAVAILABLE" />
                       )}
                     </div>
                   </motion.div>
                 </div>
 
-                {/* ── Column 2 ── */}
+                {/* ── Column 2: Threat Radar, Exposed Surface & Timeline ── */}
                 <div className="flex flex-col gap-6">
 
                   {/* Threat Intel */}
                   <motion.div variants={fadeUpBlock} className="bg-surface-container-lowest border border-outline-variant p-6">
-                    <SectionHeader
-                      title="Global Threat Radar"
-                      icon={ShieldAlert}
-                      error={data.threat_intel?.verdict === 'MALICIOUS'}
-                    />
+                    <SectionHeader title="Global Threat Radar" icon={ShieldAlert} />
 
                     {data.threat_intel?.available ? (
                       <div className="space-y-4">
@@ -1218,7 +1281,7 @@ ${data.ai_explanation?.summary || 'N/A'}
                             ? 'bg-primary-container/10 border-primary-container/30 text-primary-container'
                             : data.threat_intel.verdict === 'MALICIOUS'
                               ? 'bg-error/10 border-error/50 text-error'
-                              : 'bg-surface-container border-outline/30 text-on-surface'}`}>
+                              : 'bg-yellow-400/10 border-yellow-400/30 text-yellow-400'}`}>
                           <span>Aggregate Verdict</span>
                           <span className="font-bold">{data.threat_intel.verdict || 'UNKNOWN'}</span>
                         </div>
@@ -1239,172 +1302,144 @@ ${data.ai_explanation?.summary || 'N/A'}
 
                         {/* Per-engine breakdown */}
                         {data.threat_intel.engines && (
-                          <div className="space-y-1 mt-2">
-                            {Object.entries(data.threat_intel.engines).map(([name, engine]: [string, any]) => (
-                              <div key={name} className="flex items-center justify-between text-[10px] font-mono uppercase py-1 border-b border-outline/10">
-                                <span className="text-on-surface/60">{name}</span>
-                                <span className={`px-2 py-0.5 font-bold ${engine?.flagged ? 'bg-error/20 text-error' : 'bg-primary-container/10 text-primary-container'}`}>
-                                  {engine?.flagged ? 'FLAGGED' : engine?.available === false ? 'UNAVAILABLE' : 'CLEAN'}
-                                </span>
-                              </div>
-                            ))}
+                          <div className="space-y-1.5 mt-2">
+                            {Object.entries(data.threat_intel.engines).map(([name, engine]: [string, any]) => {
+                              const isFlagged = engine?.flagged;
+                              const isUnavailable = engine?.available === false;
+                              return (
+                                <div key={name} className="flex items-center justify-between text-[11px] font-mono uppercase py-1 border-b border-outline/10">
+                                  <span className="text-on-surface/70">{name}</span>
+                                  {isFlagged ? (
+                                    <StatusBadge status="fail" label="FLAGGED" />
+                                  ) : isUnavailable ? (
+                                    <StatusBadge status="unavailable" label="UNAVAILABLE" />
+                                  ) : (
+                                    <StatusBadge status="pass" label="CLEAN" />
+                                  )}
+                                </div>
+                              );
+                            })}
                           </div>
                         )}
                       </div>
                     ) : (
-                      <div className="text-xs text-error font-mono">{data.threat_intel?.error || "UNAVAILABLE"}</div>
+                      <StatusBadge status="unavailable" label="THREAT RADAR UNAVAILABLE" />
                     )}
                   </motion.div>
 
-                  {/* Infrastructure Surface */}
+                  {/* Infrastructure Surface & CVEs */}
                   <motion.div variants={fadeUpBlock} className="bg-surface-container-lowest border border-outline-variant p-6">
                     <SectionHeader title="Infrastructure Surface (Shodan DB)" icon={Server} />
                     {data.infrastructure?.available ? (
                       <div className="space-y-4 text-xs font-mono uppercase">
+                        {/* Open Ports */}
                         <div>
-                          <span className="text-[10px] text-on-surface/50 block mb-2 font-bold">Open Ports ({data.infrastructure.ports?.length || 0})</span>
-                          <div className="flex flex-wrap gap-1.5 text-primary-container">
-                            {data.infrastructure.ports && data.infrastructure.ports.length > 0
-                              ? data.infrastructure.ports.map(p => {
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-[10px] text-on-surface/70 font-bold">Open Ports ({data.infrastructure.ports?.length || 0})</span>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {data.infrastructure.ports && data.infrastructure.ports.length > 0 ? (
+                              data.infrastructure.ports.map(p => {
                                 const isDanger = [21, 23, 25, 110, 143, 3306, 5432, 27017].includes(p);
                                 return (
                                   <span
                                     key={p}
-                                    className={`px-2 py-0.5 border text-[11px] ${isDanger ? 'bg-error/10 border-error/40 text-error' : 'bg-primary-container/10 border-primary-container/20 text-primary-container'}`}
+                                    className={`px-2 py-0.5 border text-[11px] ${isDanger ? 'bg-error/10 border-error/40 text-error font-bold' : 'bg-primary-container/10 border-primary-container/20 text-primary-container'}`}
                                   >
                                     {p}
                                   </span>
                                 );
                               })
-                              : <span className="text-on-surface/40">NO OPEN PORTS DETECTED</span>}
+                            ) : (
+                              <span className="text-on-surface/40">NO OPEN PORTS DETECTED</span>
+                            )}
+                          </div>
+                          {/* Open Ports Legend */}
+                          <div className="flex items-center gap-3 mt-2 text-[9px] text-on-surface/40 font-mono">
+                            <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-primary-container"></span> 🟢 Standard / Encrypted</span>
+                            <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-error"></span> 🔴 Legacy / Database</span>
                           </div>
                         </div>
 
+                        {/* CVEs with Interactive Disclosure */}
                         {data.infrastructure.vulns && data.infrastructure.vulns.length > 0 && (
-                          <div>
-                            <span className="text-[10px] text-error block mb-2 font-bold">
-                              Exposed CVE Vulnerabilities ({data.infrastructure.vulns.length})
-                            </span>
-                            <div className="flex flex-wrap gap-1.5 text-error">
-                              {data.infrastructure.vulns.slice(0, 10).map((cve: string) => (
-                                <span key={cve} className="bg-error/10 border border-error/30 px-1.5 py-0.5 text-[10px] font-mono">
+                          <div className="border-t border-outline/10 pt-3">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-[10px] text-error font-bold">
+                                Exposed CVE Vulnerabilities ({data.infrastructure.vulns.length})
+                              </span>
+                              {data.infrastructure.vulns.length > 6 && (
+                                <button
+                                  onClick={() => setExpandAllCves(!expandAllCves)}
+                                  className="text-[10px] text-primary-container flex items-center gap-1 hover:underline cursor-pointer"
+                                >
+                                  {expandAllCves ? <>COLLAPSE <ChevronUp className="w-3 h-3" /></> : <>SHOW ALL ({data.infrastructure.vulns.length}) <ChevronDown className="w-3 h-3" /></>}
+                                </button>
+                              )}
+                            </div>
+                            <div className={`flex flex-wrap gap-1.5 ${expandAllCves ? 'max-h-48 overflow-y-auto' : ''}`}>
+                              {(expandAllCves ? data.infrastructure.vulns : data.infrastructure.vulns.slice(0, 6)).map((cve: string) => (
+                                <span key={cve} className="bg-error/10 border border-error/30 px-1.5 py-0.5 text-[10px] text-error font-mono">
                                   {cve}
                                 </span>
                               ))}
-                              {data.infrastructure.vulns.length > 10 && (
-                                <span className="text-error/70 pt-1 text-[10px]">+{data.infrastructure.vulns.length - 10} MORE</span>
+                              {!expandAllCves && data.infrastructure.vulns.length > 6 && (
+                                <button
+                                  onClick={() => setExpandAllCves(true)}
+                                  className="text-error/80 px-2 py-0.5 border border-error/20 bg-error/5 text-[10px] hover:bg-error/20 cursor-pointer"
+                                >
+                                  +{data.infrastructure.vulns.length - 6} MORE...
+                                </button>
                               )}
                             </div>
                           </div>
                         )}
-
-                        <div className="grid grid-cols-2 gap-4 border-t border-outline/10 pt-4 text-[10px]">
-                          <div>
-                            <span className="text-on-surface/50 block mb-1">Tags</span>
-                            <span className="text-on-surface/80">{data.infrastructure.tags?.length ? data.infrastructure.tags.join(', ') : 'NONE'}</span>
-                          </div>
-                          <div>
-                            <span className="text-on-surface/50 block mb-1">CPE Fingerprints</span>
-                            <span className="text-on-surface/80 opacity-60">
-                              {data.infrastructure.cpes?.length ? `${data.infrastructure.cpes.length} Software Matches` : 'NONE'}
-                            </span>
-                          </div>
-                        </div>
                       </div>
                     ) : (
-                      <div className="text-xs text-on-surface/40 font-mono italic">{data.infrastructure?.error || "No infrastructure profile found."}</div>
+                      <StatusBadge status="unavailable" label="INFRASTRUCTURE PROFILE UNAVAILABLE" />
                     )}
                   </motion.div>
 
-                  {/* Subdomains & Historical Footprint */}
-                  <motion.div variants={fadeUpBlock} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Historical Footprint & Passive DNS Timeline */}
+                  <motion.div variants={fadeUpBlock} className="bg-surface-container-lowest border border-outline-variant p-6">
+                    <SectionHeader title="Historical Footprint & Passive DNS" icon={History} />
 
-                    {/* Subdomain CT Logs with Search & Active Probing */}
-                    <div className="bg-surface-container-lowest border border-outline-variant p-4 flex flex-col">
-                      <SectionHeader
-                        title="Subdomains (Active + CT)"
-                        icon={Network}
-                        badge={`${data.subdomains?.total ?? 0}`}
-                      />
-                      {data.subdomains?.available ? (
-                        <div className="text-xs font-mono uppercase space-y-2.5">
-                          {/* Search bar inside subdomains */}
-                          <div className="flex items-center gap-1 bg-surface-container px-2 py-1 border border-outline/20">
-                            <Search className="w-3 h-3 text-on-surface/40" />
-                            <input
-                              type="text"
-                              value={subdomainSearch}
-                              onChange={(e) => setSubdomainSearch(e.target.value)}
-                              placeholder="FILTER..."
-                              className="bg-transparent border-none outline-none text-[10px] w-full text-on-surface"
-                            />
-                            {subdomainSearch && (
-                              <button onClick={() => setSubdomainSearch("")} className="text-on-surface/40 hover:text-primary-container">
-                                <X className="w-2.5 h-2.5" />
-                              </button>
-                            )}
-                          </div>
+                    <div className="space-y-4 font-mono text-xs">
+                      <div className="grid grid-cols-2 gap-3 border-b border-outline/10 pb-3 text-[11px]">
+                        <div>
+                          <span className="text-on-surface/50 block">Wayback Captures:</span>
+                          <span className="text-primary-container font-bold">{data.historical?.wayback?.snapshot_count ?? 0}</span>
+                        </div>
+                        <div>
+                          <span className="text-on-surface/50 block">First Archive:</span>
+                          <span>{data.historical?.wayback?.first_snapshot ? data.historical.wayback.first_snapshot.slice(0, 8) : 'N/A'}</span>
+                        </div>
+                      </div>
 
-                          {/* Subdomains scroll view */}
-                          <div className="max-h-36 overflow-y-auto space-y-1 pr-1">
-                            {filteredSubdomains.length > 0 ? (
-                              filteredSubdomains.slice(0, 35).map((sub, i) => (
-                                <div key={i} className="flex justify-between items-center text-[10px] py-0.5 border-b border-white/5">
-                                  <div className="truncate max-w-[75%] flex items-center gap-1">
-                                    {sub.source === 'ACTIVE_DOH' && (
-                                      <span className="text-[8px] bg-primary-container/20 text-primary-container px-1 py-0.2">ACTIVE</span>
-                                    )}
-                                    <span className="text-on-surface/80">{sub.subdomain}</span>
-                                  </div>
-                                  <CopyBtn text={sub.subdomain} />
+                      {/* Visual IP History Timeline */}
+                      <div>
+                        <div className="text-[10px] text-primary-container uppercase font-bold mb-2 flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5" /> Resolution Timeline (Passive DNS)
+                        </div>
+
+                        {data.historical?.ip_history?.history && data.historical.ip_history.history.length > 0 ? (
+                          <div className="space-y-2 border-l border-primary-container/30 pl-3 ml-1.5 my-2">
+                            {data.historical.ip_history.history.map((rec, i) => (
+                              <div key={i} className="relative text-[11px]">
+                                <div className="absolute -left-[17px] top-1.5 w-2 h-2 rounded-full bg-primary-container"></div>
+                                <div className="flex items-center justify-between text-on-surface">
+                                  <span className="font-bold text-primary-container">{rec.ip}</span>
+                                  <span className="text-[10px] text-on-surface/50">{rec.last_seen}</span>
                                 </div>
-                              ))
-                            ) : (
-                              <div className="text-[10px] text-on-surface/40 py-2">No matches found</div>
-                            )}
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="text-[10px] text-error font-mono">{data.subdomains?.error || "UNAVAILABLE"}</div>
-                      )}
-                    </div>
-
-                    {/* Historical & Passive DNS */}
-                    <div className="bg-surface-container-lowest border border-outline-variant p-4 flex flex-col">
-                      <SectionHeader title="Passive DNS & Archives" icon={History} />
-                      {data.historical?.available ? (
-                        <div className="text-[10px] font-mono uppercase space-y-2">
-                          <div className="flex justify-between border-b border-outline/10 py-1">
-                            <span className="text-on-surface/50">Wayback Captures:</span>
-                            <span className="text-primary-container font-bold">{data.historical.wayback?.snapshot_count ?? 0}</span>
-                          </div>
-                          <div className="flex justify-between border-b border-outline/10 py-1">
-                            <span className="text-on-surface/50">First Archive:</span>
-                            <span className="truncate max-w-[50%]">
-                              {data.historical.wayback?.first_snapshot
-                                ? data.historical.wayback.first_snapshot.slice(0, 8)
-                                : 'N/A'}
-                            </span>
-                          </div>
-                          {data.historical.passive_dns && data.historical.passive_dns.length > 0 && (
-                            <div>
-                              <span className="text-primary-container block mb-1">Passive DNS (OTX):</span>
-                              <div className="max-h-20 overflow-y-auto space-y-1">
-                                {data.historical.passive_dns.slice(0, 4).map((pdns, i) => (
-                                  <div key={i} className="flex justify-between text-[9px] text-on-surface/70">
-                                    <span>{pdns.ip}</span>
-                                    <span className="text-on-surface/40">{pdns.last_seen ? pdns.last_seen.split('T')[0] : 'N/A'}</span>
-                                  </div>
-                                ))}
+                                <div className="text-[10px] text-on-surface/60 truncate">{rec.owner} ({rec.location})</div>
                               </div>
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="text-[10px] text-on-surface/40 font-mono italic">No historical footprint identified.</div>
-                      )}
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-on-surface/40 text-[11px] py-1">No historical IP changes recorded</div>
+                        )}
+                      </div>
                     </div>
-
                   </motion.div>
                 </div>
               </div>
@@ -1425,7 +1460,7 @@ ${data.ai_explanation?.summary || 'N/A'}
       {legalModal && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={() => setLegalModal(null)}>
           <div className="bg-surface-container border border-outline-variant p-6 max-w-md w-full relative" onClick={e => e.stopPropagation()}>
-            <button onClick={() => setLegalModal(null)} className="absolute top-4 right-4 text-on-surface/50 hover:text-primary-container">
+            <button onClick={() => setLegalModal(null)} className="absolute top-4 right-4 text-on-surface/50 hover:text-primary-container cursor-pointer">
               <X className="w-5 h-5" />
             </button>
             <h2 className="text-lg font-headline font-bold text-primary-container mb-3 uppercase tracking-widest border-b border-primary-container/20 pb-2">

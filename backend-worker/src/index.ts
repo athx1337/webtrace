@@ -452,7 +452,7 @@ async function whoisNetwork(ip: string) {
 
 async function dnsRecords(domain: string) {
 	try {
-		const RECORD_TYPES = ['A', 'AAAA', 'MX', 'TXT', 'NS', 'SOA', 'CAA'];
+		const RECORD_TYPES = ['A', 'AAAA', 'MX', 'TXT', 'NS'];
 		const records: Record<string, string[]> = {};
 
 		await Promise.all(
@@ -471,8 +471,8 @@ async function dnsRecords(domain: string) {
 		const dmarcRecord = dmarcAns.length ? dmarcAns[0] : null;
 		const hasDmarc = dmarcRecord !== null;
 
-		// DKIM
-		const selectors = ['default', 'google', 'k1', 'dkim', 'mail', 'smtp'];
+		// DKIM (top selectors)
+		const selectors = ['google', 'default'];
 		const dkimResults = await Promise.all(
 			selectors.map(async (selector) => {
 				const ans = await queryDNS(`${selector}._domainkey.${domain}`, 'TXT');
@@ -492,10 +492,7 @@ async function dnsRecords(domain: string) {
 			flags.push('No DMARC policy — no protection against spoofed email');
 		}
 		if (!dkimFound) {
-			flags.push('No DKIM record found (checked common selectors)');
-		}
-		if (!records['CAA'] || records['CAA'].length === 0) {
-			flags.push('No CAA record — any CA can issue certs for this domain');
+			flags.push('No DKIM record found on common selectors');
 		}
 
 		return {
@@ -579,14 +576,14 @@ async function sslAnalysis(domain: string) {
 		}
 		if (isFreeCa) {
 			flags.push(
-				'Free CA used (Let\'s Encrypt / ZeroSSL) — combined with other signals, may indicate phishing'
+				'Free CA used (Let\'s Encrypt / ZeroSSL)'
 			);
 		}
 		if (!domainMatch) {
-			flags.push('Certificate domain mismatch — cert not issued for this hostname');
+			flags.push('Certificate domain mismatch');
 		}
 		if (sanCount > 50) {
-			flags.push(`Certificate covers ${sanCount} domains — shared hosting or CDN`);
+			flags.push(`Certificate covers ${sanCount} domains`);
 		}
 
 		return {
@@ -672,11 +669,8 @@ async function infrastructureScan(ip: string) {
 
 // --- Active DoH Subdomain Brute-Force Probe + CT Log Aggregator ---
 const COMMON_SUBDOMAIN_WORDLIST = [
-	'admin', 'vpn', 'api', 'dev', 'staging', 'portal', 'mail', 'corp',
-	'internal', 'remote', 'gateway', 'auth', 'app', 'test', 'demo', 'cdn',
-	'beta', 'sso', 'git', 'jenkins', 'k8s', 'grafana', 'db', 'cpanel',
-	'webmail', 'monitor', 'status', 'bastion', 'vault', 'identity', 'ns1',
-	'ns2', 'mx', 'direct', 'server'
+	'admin', 'vpn', 'api', 'dev', 'staging', 'portal', 'mail', 'cpanel',
+	'webmail', 'corp', 'internal', 'remote', 'gateway', 'auth', 'app'
 ];
 
 async function subdomains(domain: string) {
@@ -1114,9 +1108,57 @@ async function historicalLookup(domain: string, viewDnsKey?: string) {
 	return { available: true, wayback, passive_dns, ip_history };
 }
 
+function generateLocalStructuredBrief(scan: any): string {
+	const domain = scan.domain || 'unknown';
+	const addr = scan.address_lookup || {};
+	const whois = scan.whois_domain || {};
+	const net = scan.whois_network || {};
+	const ssl = scan.ssl || {};
+	const infra = scan.infrastructure || {};
+	const threat = scan.threat_intel || {};
+	const dns = scan.dns_records || {};
+
+	const cveCount = infra.vulns?.length || 0;
+	const openPorts: number[] = infra.ports || [];
+	const sensitivePorts = [21, 23, 25, 110, 143, 3306, 5432, 27017].filter(p => openPorts.includes(p));
+
+	const perimeterText = `Target domain \`${domain}\` is registered via ${whois.registrar || 'an external registrar'} (age: ${whois.age_days || 'unknown'} days) hosted on ${net.org || 'an edge network'}${net.country ? ` (${net.country})` : ''}. ${addr.cdn_detected ? `Origin infrastructure is shielded by ${addr.cdn_detected} reverse proxies.` : 'Direct origin IP address is exposed without CDN edge concealment.'}`;
+
+	const findings: string[] = [];
+	if (cveCount > 0) findings.push(`Detected ${cveCount} exposed CVE vulnerability signatures on running services (${infra.vulns.slice(0, 4).join(', ')}).`);
+	if (sensitivePorts.length > 0) findings.push(`Sensitive service ports are publicly accessible: ${sensitivePorts.join(', ')}.`);
+	if (!dns.has_spf || !dns.has_dmarc) findings.push(`Email spoofing defense is degraded (${!dns.has_spf ? 'Missing SPF' : ''}${!dns.has_spf && !dns.has_dmarc ? ', ' : ''}${!dns.has_dmarc ? 'Missing DMARC' : ''}).`);
+	if (ssl.available && !ssl.valid) findings.push('Cryptographic identity is untrusted or missing a valid certificate.');
+	if (threat.verdict && threat.verdict !== 'CLEAN') findings.push(`Multi-vendor threat intelligence flagged target as ${threat.verdict}.`);
+	if (findings.length === 0) findings.push('No critical perimeter exposure or active threat pulses identified across external scans.');
+
+	const findingsText = findings.join(' ');
+
+	const recs: string[] = [];
+	if (sensitivePorts.length > 0) recs.push(`1. Restrict exposed ports (${sensitivePorts.join(', ')}) behind an internal firewall or VPN.`);
+	if (!dns.has_dmarc) recs.push('2. Implement a strict DMARC policy (\`v=DMARC1; p=reject\`) to eliminate spoofing.');
+	if (cveCount > 0) recs.push('3. Patch exposed software packages to mitigate identified CVE vulnerabilities.');
+	if (recs.length === 0) recs.push('1. Maintain regular vulnerability scanning and enforce HSTS and DNSSEC signing.');
+
+	return `### 🌐 Perimeter & Attack Surface Overview
+${perimeterText}
+
+### ⚠️ Critical Findings & Exposure
+${findingsText}
+
+### 🛡️ Prioritized Remediation Roadmap
+${recs.join('\n')}`;
+}
+
 // Structured 3-Part Pentest AI Briefing
 async function generateExplanation(scan: any, geminiKey?: string) {
-	if (!geminiKey) return { available: false, error: 'GEMINI_API_KEY not set' };
+	if (!geminiKey) {
+		return {
+			available: true,
+			summary: generateLocalStructuredBrief(scan),
+			engine: 'PENTEST_HEURISTICS_ENGINE'
+		};
+	}
 
 	const domain = scan.domain || 'unknown';
 	const addr = scan.address_lookup || {};
@@ -1126,7 +1168,6 @@ async function generateExplanation(scan: any, geminiKey?: string) {
 	const infra = scan.infrastructure || {};
 	const threat = scan.threat_intel || {};
 	const subs = scan.subdomains || {};
-	const hist = scan.historical || {};
 	const dns = scan.dns_records || {};
 	const tech = scan.tech_stack || {};
 
@@ -1185,7 +1226,12 @@ Subdomains Found: ${subs.total || 0} (Active DoH Probed: ${subs.active_probed ||
 		} catch {}
 	}
 
-	return { available: false, error: 'AI summary generation temporarily unavailable' };
+	// Fallback to structured local heuristics if external API is throttled or key expired
+	return {
+		available: true,
+		summary: generateLocalStructuredBrief(scan),
+		engine: 'PENTEST_HEURISTICS_ENGINE'
+	};
 }
 
 // --- Endpoints ---
