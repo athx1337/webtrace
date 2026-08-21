@@ -1139,13 +1139,13 @@ function generateLocalStructuredBrief(scan: any): string {
 	if (cveCount > 0) recs.push('3. Patch exposed software packages to mitigate identified CVE vulnerabilities.');
 	if (recs.length === 0) recs.push('1. Maintain regular vulnerability scanning and enforce HSTS and DNSSEC signing.');
 
-	return `### 🌐 Perimeter & Attack Surface Overview
+	return `### 🌐 Website & Server Overview
 ${perimeterText}
 
-### ⚠️ Critical Findings & Exposure
+### ⚠️ Key Findings & Security Warnings
 ${findingsText}
 
-### 🛡️ Prioritized Remediation Roadmap
+### 🛡️ Recommended Steps & Improvements
 ${recs.join('\n')}`;
 }
 
@@ -1170,17 +1170,17 @@ async function generateExplanation(scan: any, geminiKey?: string) {
 	const dns = scan.dns_records || {};
 	const tech = scan.tech_stack || {};
 
-	const prompt = `You are a Lead Penetration Tester and Cyber Threat Intelligence Analyst writing a structured executive assessment.
+	const prompt = `You are a Cybersecurity and Web Safety Analyst writing a clear, structured domain security summary.
 Analyze the target telemetry below and structure your response into EXACTLY 3 sections with clear markdown headers:
 
-### 🌐 Perimeter & Attack Surface Overview
-(Provide a concise 1-2 sentence assessment of hosting architecture, CDN protection, domain age, and overall perimeter posture).
+### 🌐 Website & Server Overview
+(Provide a concise 1-2 sentence overview of website hosting, CDN protection, domain age, and overall server setup).
 
-### ⚠️ Critical Findings & Exposure
-(Identify specific open database/management ports, CVE vulnerabilities, missing SPF/DMARC/DKIM/DNSSEC email posture, SSL lifespan/CA anomalies, and threat feed indicators).
+### ⚠️ Key Findings & Security Warnings
+(Identify specific open database/management ports, CVE vulnerabilities, missing SPF/DMARC/DKIM/DNSSEC email posture, SSL certificate status, and threat feed indicators).
 
-### 🛡️ Prioritized Remediation Roadmap
-(Provide 2-3 specific, actionable technical recommendations for security engineers).
+### 🛡️ Recommended Steps & Improvements
+(Provide 2-3 specific, actionable recommendations in a numbered list on how to fix and harden the domain).
 
 Telemetry Data:
 Domain: ${domain}

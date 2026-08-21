@@ -570,6 +570,106 @@ const RawJsonModal = ({ data, onClose }: { data: AnalyzeResponse; onClose: () =>
   );
 };
 
+// ---------- Inline Markdown & AI Briefing Formatter ----------
+function renderInlineMarkdown(text: string) {
+  const parts = text.split(/(`[^`]+`|\*\*[^*]+\*\*)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith('`') && part.endsWith('`')) {
+      return (
+        <code key={i} className="px-1.5 py-0.5 bg-[#c8ff3d]/10 border border-[#c8ff3d]/25 text-[#c8ff3d] font-mono text-[11px] rounded-none">
+          {part.slice(1, -1)}
+        </code>
+      );
+    }
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return (
+        <strong key={i} className="text-white font-semibold">
+          {part.slice(2, -2)}
+        </strong>
+      );
+    }
+    return part;
+  });
+}
+
+function FormattedAiBriefing({ text }: { text: string }) {
+  if (!text) return null;
+
+  // Split into sections by markdown headings (### or ##)
+  const sections = text.split(/(?=^#{2,3}\s+)/gm);
+
+  return (
+    <div className="space-y-4 font-body text-xs md:text-sm">
+      {sections.map((sec, idx) => {
+        const trimmed = sec.trim();
+        if (!trimmed) return null;
+
+        const lines = trimmed.split('\n');
+        let header = '';
+        let bodyLines = lines;
+
+        if (lines[0].startsWith('#')) {
+          header = lines[0].replace(/^#{2,3}\s*/, '').trim();
+          bodyLines = lines.slice(1);
+        }
+
+        return (
+          <div key={idx} className="bg-[#050706] border border-white/15 p-4 space-y-2.5 transition-colors hover:border-white/25">
+            {header && (
+              <div className="flex items-center gap-2 font-label text-xs font-bold uppercase tracking-wider text-[#c8ff3d] border-b border-white/10 pb-2 mb-2">
+                <span className="w-1.5 h-1.5 bg-[#c8ff3d] inline-block"></span>
+                <span>{header}</span>
+              </div>
+            )}
+            <div className="space-y-2 text-[#d4dad4] leading-relaxed">
+              {bodyLines.map((line, lIdx) => {
+                const lineTrim = line.trim();
+                if (!lineTrim) return null;
+
+                // Numbered list
+                if (/^\d+\.\s+/.test(lineTrim)) {
+                  const num = lineTrim.match(/^(\d+)\.\s+/)?.[1];
+                  const content = lineTrim.replace(/^\d+\.\s+/, '');
+                  return (
+                    <div key={lIdx} className="flex items-start gap-3 pl-1 py-1">
+                      <span className="flex items-center justify-center w-5 h-5 bg-[#c8ff3d]/15 text-[#c8ff3d] font-mono text-[10px] font-bold shrink-0 border border-[#c8ff3d]/30">
+                        {num}
+                      </span>
+                      <div className="flex-1 text-xs md:text-[13px] text-[#e7ebe6]/90 pt-0.5">
+                        {renderInlineMarkdown(content)}
+                      </div>
+                    </div>
+                  );
+                }
+
+                // Bullet item
+                if (lineTrim.startsWith('- ') || lineTrim.startsWith('* ') || lineTrim.startsWith('• ')) {
+                  const content = lineTrim.replace(/^[-*•]\s+/, '');
+                  return (
+                    <div key={lIdx} className="flex items-start gap-2.5 pl-1 py-0.5">
+                      <span className="text-[#c8ff3d] text-xs font-mono shrink-0">▸</span>
+                      <div className="flex-1 text-xs md:text-[13px] text-[#e7ebe6]/90">
+                        {renderInlineMarkdown(content)}
+                      </div>
+                    </div>
+                  );
+                }
+
+                // Normal paragraph
+                return (
+                  <p key={lIdx} className="text-xs md:text-[13px] leading-relaxed text-[#dcdfdc]">
+                    {renderInlineMarkdown(lineTrim)}
+                  </p>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ---------- Main App Component ----------
 export default function App() {
   const [targetUrl, setTargetUrl] = useState("google.com");
@@ -1133,9 +1233,9 @@ ${data.ai_explanation?.summary || 'N/A'}
                         </button>
                       </div>
 
-                      <div className="font-body text-xs md:text-sm text-[#e7ebe6] leading-relaxed whitespace-pre-line border-l-2 border-[#c8ff3d]/60 pl-4 py-1 space-y-3">
-                        {data.ai_explanation.available ? (
-                          data.ai_explanation.summary
+                      <div className="pt-1">
+                        {data.ai_explanation.available && data.ai_explanation.summary ? (
+                          <FormattedAiBriefing text={data.ai_explanation.summary} />
                         ) : (
                           <StatusBadge status="unavailable" label="AI SUMMARY TEMPORARILY UNAVAILABLE" />
                         )}
