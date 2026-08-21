@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, useMotionValue, useSpring, useTransform } from 'motion/react';
 import {
   Activity,
   Search,
@@ -36,7 +36,8 @@ import {
   Mail,
   GitCompare,
   Clock,
-  RefreshCw
+  RefreshCw,
+  Crosshair
 } from 'lucide-react';
 
 // ---------- Interfaces ----------
@@ -221,7 +222,6 @@ function computeRiskScore(data: AnalyzeResponse) {
   let score = 100;
   const penalties: Array<{ reason: string; deduction: number }> = [];
 
-  // Threat Intel
   if (data.threat_intel?.verdict === 'MALICIOUS') {
     score -= 40;
     penalties.push({ reason: 'Flagged malicious by threat feeds', deduction: 40 });
@@ -230,7 +230,6 @@ function computeRiskScore(data: AnalyzeResponse) {
     penalties.push({ reason: 'Suspicious reputation signals', deduction: 20 });
   }
 
-  // CVEs & Vulnerabilities
   const cveCount = data.infrastructure?.vulns?.length || 0;
   if (cveCount > 0) {
     const deduction = Math.min(cveCount * 4, 30);
@@ -238,7 +237,6 @@ function computeRiskScore(data: AnalyzeResponse) {
     penalties.push({ reason: `${cveCount} known CVE(s) exposed`, deduction });
   }
 
-  // Exposed Database or Sensitive Ports
   const sensitivePorts = [21, 23, 25, 110, 143, 3306, 5432, 27017, 6379];
   const openSensitive = (data.infrastructure?.ports || []).filter(p => sensitivePorts.includes(p));
   if (openSensitive.length > 0) {
@@ -247,7 +245,6 @@ function computeRiskScore(data: AnalyzeResponse) {
     penalties.push({ reason: `Exposed legacy/database ports (${openSensitive.join(', ')})`, deduction });
   }
 
-  // SSL Issues
   if (data.ssl?.available && !data.ssl.valid) {
     score -= 20;
     penalties.push({ reason: 'Invalid or untrusted SSL certificate', deduction: 20 });
@@ -256,7 +253,6 @@ function computeRiskScore(data: AnalyzeResponse) {
     penalties.push({ reason: 'SSL certificate expiring soon', deduction: 10 });
   }
 
-  // Email Security
   if (data.dns_records?.available) {
     if (!data.dns_records.has_spf) {
       score -= 5;
@@ -268,7 +264,6 @@ function computeRiskScore(data: AnalyzeResponse) {
     }
   }
 
-  // Security Headers
   if (data.tech_stack?.available && data.tech_stack.security_headers) {
     if (!data.tech_stack.security_headers.hsts?.present) {
       score -= 5;
@@ -301,7 +296,14 @@ function computeRiskScore(data: AnalyzeResponse) {
 
 // ---------- Tile Components from New Redesign ----------
 function Tile({ children, className = '' }: { children: React.ReactNode; className?: string }) {
-  return <section className={`border border-white/20 bg-[#080b09] ${className}`}>{children}</section>;
+  return (
+    <motion.section
+      whileHover={{ y: -2, transition: { duration: 0.15 } }}
+      className={`border border-white/20 bg-[#080b09] relative transition-shadow hover:shadow-[0_4px_20px_rgba(200,255,61,0.06)] hover:border-white/35 ${className}`}
+    >
+      {children}
+    </motion.section>
+  );
 }
 
 function TileLabel({ children, icon }: { children: React.ReactNode; icon?: React.ReactNode }) {
@@ -584,6 +586,29 @@ export default function App() {
   const [scanDiffAlert, setScanDiffAlert] = useState<string[]>([]);
   const [retryingBrief, setRetryingBrief] = useState(false);
 
+  // Parallax Motion Values
+  const mouseX = useMotionValue(0);
+  const mouseY = useMotionValue(0);
+  const springConfig = { damping: 30, stiffness: 100 };
+  const smoothMouseX = useSpring(mouseX, springConfig);
+  const smoothMouseY = useSpring(mouseY, springConfig);
+
+  // Dynamic Parallax Shifts
+  const bgGridX = useTransform(smoothMouseX, [-800, 800], [-18, 18]);
+  const bgGridY = useTransform(smoothMouseY, [-600, 600], [-18, 18]);
+  const floatReticleX = useTransform(smoothMouseX, [-800, 800], [30, -30]);
+  const floatReticleY = useTransform(smoothMouseY, [-600, 600], [25, -25]);
+
+  const [cursorPos, setCursorPos] = useState({ x: -1000, y: -1000 });
+
+  const handleGlobalMouseMove = (e: React.MouseEvent) => {
+    setCursorPos({ x: e.clientX, y: e.clientY });
+    const { clientX, clientY } = e;
+    const { innerWidth, innerHeight } = window;
+    mouseX.set(clientX - innerWidth / 2);
+    mouseY.set(clientY - innerHeight / 2);
+  };
+
   // System Status State
   const [serverStatus, setServerStatus] = useState<'checking' | 'waking' | 'awake' | 'offline'>('checking');
 
@@ -688,7 +713,6 @@ export default function App() {
     }, 1000);
   };
 
-  // Download Markdown Report
   const handleExportMarkdown = () => {
     if (!data) return;
     const risk = computeRiskScore(data);
@@ -776,14 +800,50 @@ ${data.ai_explanation?.summary || 'N/A'}
   ];
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-[#050706] text-[#e7ebe6] relative selection:bg-[#c8ff3d] selection:text-[#050706] font-body cyber-grid">
+    <div
+      onMouseMove={handleGlobalMouseMove}
+      className="flex flex-col h-screen overflow-hidden bg-[#050706] text-[#e7ebe6] relative selection:bg-[#c8ff3d] selection:text-[#050706] font-body select-none"
+    >
+      {/* Interactive Spotlight Glow following mouse */}
+      <div
+        className="pointer-events-none fixed inset-0 z-0 transition-opacity duration-300"
+        style={{
+          background: `radial-gradient(650px circle at ${cursorPos.x}px ${cursorPos.y}px, rgba(200, 255, 61, 0.045), transparent 70%)`
+        }}
+      />
+
+      {/* Parallax Background Grid */}
+      <motion.div
+        className="fixed inset-0 pointer-events-none z-0 cyber-grid opacity-75"
+        style={{ x: bgGridX, y: bgGridY }}
+      />
+
+      {/* Floating Parallax Reticles & Wireframe Corners */}
+      <motion.div
+        className="fixed top-16 right-16 pointer-events-none z-0 opacity-15 hidden lg:block"
+        style={{ x: floatReticleX, y: floatReticleY }}
+      >
+        <Crosshair className="w-32 h-32 text-[#c8ff3d]" strokeWidth={0.8} />
+      </motion.div>
+      <motion.div
+        className="fixed bottom-20 left-12 pointer-events-none z-0 opacity-10 hidden lg:block"
+        style={{ x: floatReticleX, y: floatReticleY }}
+      >
+        <div className="w-40 h-40 border border-[#c8ff3d] border-dashed rounded-full animate-[spin_60s_linear_infinite]" />
+      </motion.div>
+
       <TopNav onOpenTopology={() => setShowTopology(true)} hasData={!!data} />
 
       <div className="flex flex-1 overflow-hidden relative z-10 w-full max-w-[1440px] mx-auto">
         <main className="flex-1 overflow-y-auto p-4 md:p-8 relative z-10">
 
-          {/* Header Title & ASCII Art preserved */}
-          <div className="mb-6">
+          {/* Header Title & ASCII Art with subtle parallax depth */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
+            className="mb-6"
+          >
             <div className="flex items-end justify-between mb-4">
               <pre className="hidden md:block ascii-art text-[#c8ff3d] opacity-90 text-[clamp(6px,0.8vw,10px)] select-none pointer-events-none font-bold leading-none">
                 {String.raw`__/\\\______________/\\\__/\\\\\\\\\\\\\\\__/\\\\\\\\\\\\\____/\\\\\\\\\\\\\\\____/\\\\\\\\\_________/\\\\\\\\\___________/\\\\\\\\\__/\\\\\\\\\\\\\\\_        
@@ -863,7 +923,7 @@ ${data.ai_explanation?.summary || 'N/A'}
                 <AlertTriangle className="w-4 h-4 shrink-0" /> {errorMsg}
               </div>
             )}
-          </div>
+          </motion.div>
 
           {/* Loading Animation HUD */}
           {status === 'loading' && (
@@ -1095,7 +1155,6 @@ ${data.ai_explanation?.summary || 'N/A'}
               {/* ── TAB 2: NETWORK & DNS ── */}
               {activeTab === 'Network & DNS' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Network Routing & Identity */}
                   <Tile className="p-6 flex flex-col gap-6">
                     <SectionHeader title="Network Identity & Routing" icon={Globe} />
 
@@ -1177,7 +1236,6 @@ ${data.ai_explanation?.summary || 'N/A'}
                     </div>
                   </Tile>
 
-                  {/* Cryptographic & Email Posture */}
                   <Tile className="p-6 flex flex-col gap-6">
                     <SectionHeader title="Cryptographic & Email Posture" icon={Database} />
 
@@ -1206,7 +1264,6 @@ ${data.ai_explanation?.summary || 'N/A'}
                       )}
                     </div>
 
-                    {/* Dedicated Email Security Table */}
                     <div>
                       <div className="text-[10px] font-label text-[#c8ff3d] uppercase border-b border-white/10 pb-1 mb-3 flex items-center gap-1.5">
                         <Mail className="w-3.5 h-3.5" /> Email Security & Spoofing Defense
@@ -1242,7 +1299,6 @@ ${data.ai_explanation?.summary || 'N/A'}
                       )}
                     </div>
 
-                    {/* Authoritative DNS Record Ledger */}
                     <div>
                       <div className="text-[10px] font-label text-[#c8ff3d] uppercase border-b border-white/10 pb-1 mb-3">
                         Authoritative DNS Record Ledger
@@ -1270,7 +1326,6 @@ ${data.ai_explanation?.summary || 'N/A'}
               {/* ── TAB 3: THREAT RADAR ── */}
               {activeTab === 'Threat Radar' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Global Threat Radar */}
                   <Tile className="p-6 flex flex-col gap-4">
                     <SectionHeader title="Global Threat Radar" icon={ShieldAlert} />
 
@@ -1322,7 +1377,6 @@ ${data.ai_explanation?.summary || 'N/A'}
                     )}
                   </Tile>
 
-                  {/* Infrastructure Surface & CVEs */}
                   <Tile className="p-6 flex flex-col gap-4">
                     <SectionHeader title="Infrastructure Surface (Shodan DB)" icon={Server} />
 
@@ -1453,7 +1507,6 @@ ${data.ai_explanation?.summary || 'N/A'}
               {/* ── TAB 5: SUBDOMAINS & HISTORY ── */}
               {activeTab === 'Subdomains & History' && (
                 <div className="space-y-6">
-                  {/* Subdomain Reconnaissance Panel */}
                   <Tile className="p-6">
                     <SectionHeader
                       title="Subdomain Reconnaissance (Active DoH Probe + CT Logs)"
@@ -1534,7 +1587,6 @@ ${data.ai_explanation?.summary || 'N/A'}
                     )}
                   </Tile>
 
-                  {/* Historical Footprint & Resolution Timeline */}
                   <Tile className="p-6">
                     <SectionHeader title="Historical Footprint & Resolution Timeline" icon={History} />
 
