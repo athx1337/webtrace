@@ -175,14 +175,13 @@ export function normalizeUrl(raw: string) {
 	let subdomains: string[] = [];
 	if (!isIp && parts.length > 1) {
 		tld = '.' + parts[parts.length - 1];
-		const last2 = parts.slice(-2).join('.');
-		const doubleSuffixes = [
-			'co.uk', 'org.uk', 'gov.uk', 'ac.uk', 'com.br', 'gov.br', 'com.au',
-			'net.au', 'org.au', 'co.in', 'org.in', 'net.in', 'gen.in', 'firm.in',
-			'ind.in', 'gov.in', 'edu.in', 'mil.in', 'res.in', 'nic.in', 'com.sg',
-			'edu.sg', 'gov.sg', 'co.jp', 'ne.jp', 'or.jp', 'ac.jp', 'go.jp'
-		];
-		if (doubleSuffixes.includes(last2) && parts.length >= 3) {
+		const last2 = parts.slice(-2).join('.').toLowerCase();
+		
+		// Match standard 2nd-level ccTLD categories (e.g. ac.in, edu.in, gov.in, co.uk, com.au, etc.)
+		const isSecondLevelCCTLD = 
+			/^(com|net|org|edu|gov|mil|ac|co|ne|or|go|nic|gen|ind|firm|res|sch|gob|govt|nhs)\.[a-z]{2,3}$/i.test(last2);
+
+		if (isSecondLevelCCTLD && parts.length >= 3) {
 			tld = '.' + last2;
 			domain = parts[parts.length - 3] + '.' + last2;
 			subdomains = parts.slice(0, parts.length - 3);

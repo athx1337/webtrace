@@ -43,14 +43,25 @@ describe('URL Normalization & Domain Extraction', () => {
 		expect(res.uses_https).toBe(true);
 	});
 
-	it('should correctly parse multi-level TLDs (co.uk, org.in)', () => {
+	it('should correctly parse multi-level TLDs (co.uk, org.in, ac.in)', () => {
 		const resUk = normalizeUrl('https://sub.company.co.uk');
 		expect(resUk.domain).toBe('company.co.uk');
 		expect(resUk.tld).toBe('.co.uk');
+		expect(resUk.subdomains).toEqual(['sub']);
 
 		const resIn = normalizeUrl('http://portal.gov.in');
 		expect(resIn.domain).toBe('portal.gov.in');
 		expect(resIn.tld).toBe('.gov.in');
+
+		const resJain = normalizeUrl('https://jainuniversity.ac.in');
+		expect(resJain.domain).toBe('jainuniversity.ac.in');
+		expect(resJain.tld).toBe('.ac.in');
+		expect(resJain.subdomains).toEqual([]);
+
+		const resOx = normalizeUrl('https://cs.ox.ac.uk');
+		expect(resOx.domain).toBe('ox.ac.uk');
+		expect(resOx.tld).toBe('.ac.uk');
+		expect(resOx.subdomains).toEqual(['cs']);
 	});
 
 	it('should detect suspicious typosquatting signals', () => {
