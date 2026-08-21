@@ -224,17 +224,17 @@ function computeRiskScore(data: AnalyzeResponse) {
 
   if (data.threat_intel?.verdict === 'MALICIOUS') {
     score -= 40;
-    penalties.push({ reason: 'Flagged malicious by threat feeds', deduction: 40 });
+    penalties.push({ reason: 'Found on security blocklist', deduction: 40 });
   } else if (data.threat_intel?.verdict === 'SUSPICIOUS') {
     score -= 20;
-    penalties.push({ reason: 'Suspicious reputation signals', deduction: 20 });
+    penalties.push({ reason: 'Suspicious reputation reports', deduction: 20 });
   }
 
   const cveCount = data.infrastructure?.vulns?.length || 0;
   if (cveCount > 0) {
     const deduction = Math.min(cveCount * 4, 30);
     score -= deduction;
-    penalties.push({ reason: `${cveCount} known CVE(s) exposed`, deduction });
+    penalties.push({ reason: `${cveCount} known software flaw(s) found`, deduction });
   }
 
   const sensitivePorts = [21, 23, 25, 110, 143, 3306, 5432, 27017, 6379];
@@ -242,12 +242,12 @@ function computeRiskScore(data: AnalyzeResponse) {
   if (openSensitive.length > 0) {
     const deduction = Math.min(openSensitive.length * 5, 20);
     score -= deduction;
-    penalties.push({ reason: `Exposed legacy/database ports (${openSensitive.join(', ')})`, deduction });
+    penalties.push({ reason: `Unencrypted server ports open (${openSensitive.join(', ')})`, deduction });
   }
 
   if (data.ssl?.available && !data.ssl.valid) {
     score -= 20;
-    penalties.push({ reason: 'Invalid or untrusted SSL certificate', deduction: 20 });
+    penalties.push({ reason: 'SSL certificate is missing or invalid', deduction: 20 });
   } else if (data.ssl?.days_remaining && data.ssl.days_remaining < 14) {
     score -= 10;
     penalties.push({ reason: 'SSL certificate expiring soon', deduction: 10 });
@@ -256,37 +256,37 @@ function computeRiskScore(data: AnalyzeResponse) {
   if (data.dns_records?.available) {
     if (!data.dns_records.has_spf) {
       score -= 5;
-      penalties.push({ reason: 'Missing SPF record', deduction: 5 });
+      penalties.push({ reason: 'Missing SPF email protection', deduction: 5 });
     }
     if (!data.dns_records.has_dmarc) {
       score -= 5;
-      penalties.push({ reason: 'Missing DMARC policy', deduction: 5 });
+      penalties.push({ reason: 'Missing DMARC anti-phishing policy', deduction: 5 });
     }
   }
 
   if (data.tech_stack?.available && data.tech_stack.security_headers) {
     if (!data.tech_stack.security_headers.hsts?.present) {
       score -= 5;
-      penalties.push({ reason: 'HSTS header missing', deduction: 5 });
+      penalties.push({ reason: 'HTTPS enforcement (HSTS) missing', deduction: 5 });
     }
     if (!data.tech_stack.security_headers.csp?.present) {
       score -= 5;
-      penalties.push({ reason: 'Content-Security-Policy missing', deduction: 5 });
+      penalties.push({ reason: 'Content Security Policy (CSP) missing', deduction: 5 });
     }
   }
 
   score = Math.max(0, Math.min(100, score));
 
-  let label = 'LOW EXPOSURE';
+  let label = 'SAFE & HARDENED';
   let color = 'text-[#c8ff3d]';
   let bg = 'bg-[#c8ff3d]';
 
   if (score < 50) {
-    label = 'CRITICAL RISK';
+    label = 'CRITICAL SECURITY RISK';
     color = 'text-[#ff4d4d]';
     bg = 'bg-[#ff4d4d]';
   } else if (score < 80) {
-    label = 'MODERATE EXPOSURE';
+    label = 'MODERATE ATTENTION NEEDED';
     color = 'text-[#ffaa00]';
     bg = 'bg-[#ffaa00]';
   }
@@ -294,7 +294,7 @@ function computeRiskScore(data: AnalyzeResponse) {
   return { score, label, color, bg, penalties };
 }
 
-// ---------- Tile Components from New Redesign ----------
+// ---------- Tile Components ----------
 function Tile({ children, className = '' }: { children: React.ReactNode; className?: string }) {
   return (
     <motion.section
@@ -308,7 +308,7 @@ function Tile({ children, className = '' }: { children: React.ReactNode; classNa
 
 function TileLabel({ children, icon }: { children: React.ReactNode; icon?: React.ReactNode }) {
   return (
-    <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-[#88908a]">
+    <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.16em] text-[#88908a]">
       {icon}
       {children}
     </div>
@@ -352,7 +352,7 @@ const CopyBtn = ({ text, title }: { text?: string | null; title?: string }) => {
   );
 };
 
-// ---------- Static Navigation ----------
+// ---------- Navigation ----------
 const TopNav = ({ onOpenTopology, hasData }: { onOpenTopology?: () => void; hasData?: boolean }) => (
   <nav className="flex justify-between items-center w-full px-6 py-3 bg-[#040605] border-b border-white/20 shadow-[0_4px_16px_rgba(200,255,61,0.04)] z-50 shrink-0 relative">
     <div className="flex items-center gap-3">
@@ -370,12 +370,12 @@ const TopNav = ({ onOpenTopology, hasData }: { onOpenTopology?: () => void; hasD
           className="flex items-center gap-2 font-label text-[10px] uppercase tracking-widest text-[#c8ff3d] border border-[#c8ff3d]/30 px-3 py-1.5 hover:bg-[#c8ff3d]/10 transition-all cursor-pointer"
         >
           <Network className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">Attack Surface Map</span>
+          <span className="hidden sm:inline">Network Map</span>
         </button>
       )}
       <div className="font-label text-[9px] uppercase tracking-widest text-[#c8ff3d]/90 flex items-center gap-2 border border-[#c8ff3d]/20 px-2.5 py-1 bg-[#0c100d]">
         <span className="w-1.5 h-1.5 bg-[#c8ff3d] animate-pulse"></span>
-        v2.8.4 OPERATIONAL_ENGINE
+        v2.8 Live
       </div>
     </div>
   </nav>
@@ -392,7 +392,7 @@ const Footer = ({
 }) => {
   const statusConfig = {
     awake: { text: 'EDGE: ONLINE', dotColor: 'bg-[#c8ff3d]', textColor: 'text-[#c8ff3d]', pulse: true },
-    waking: { text: 'EDGE: INITIALIZING', dotColor: 'bg-[#ffaa00]', textColor: 'text-[#ffaa00]', pulse: true },
+    waking: { text: 'EDGE: STARTING', dotColor: 'bg-[#ffaa00]', textColor: 'text-[#ffaa00]', pulse: true },
     checking: { text: 'EDGE: CONNECTING...', dotColor: 'bg-white/50', textColor: 'text-white/50', pulse: true },
     offline: { text: 'EDGE: OFFLINE', dotColor: 'bg-[#ff4d4d]', textColor: 'text-[#ff4d4d]', pulse: false }
   };
@@ -417,7 +417,7 @@ const Footer = ({
         <button onClick={onTermsClick} className="hover:text-[#c8ff3d] transition-colors cursor-pointer">
           TERMS
         </button>
-        <span className="hidden sm:inline ml-2">© 2026 WEBTRACE // RECONSOLE</span>
+        <span className="hidden sm:inline ml-2">© 2026 WEBTRACE // DOMAIN INTELLIGENCE</span>
       </div>
     </footer>
   );
@@ -427,7 +427,7 @@ const SectionHeader = ({ title, icon: Icon, badge }: { title: string; icon: any;
   <div className="flex items-center justify-between mb-4 font-label text-[#c8ff3d]">
     <div className="flex items-center gap-2">
       <Icon className="w-4 h-4" />
-      <h3 className="text-xs md:text-sm font-bold tracking-widest uppercase">{title}</h3>
+      <h3 className="text-xs md:text-sm font-bold tracking-wider uppercase">{title}</h3>
     </div>
     {badge && (
       <span className="text-[9px] px-2 py-0.5 border border-[#c8ff3d]/30 bg-[#c8ff3d]/10 font-mono tracking-wider">
@@ -450,7 +450,7 @@ const TopologyModal = ({ data, onClose }: { data: AnalyzeResponse; onClose: () =
       >
         <div className="flex justify-between items-center border-b border-white/20 pb-3 mb-6">
           <div className="flex items-center gap-2 text-[#c8ff3d] font-label text-sm uppercase tracking-widest font-bold">
-            <Network className="w-5 h-5" /> Attack Surface Topology Map: {data.domain}
+            <Network className="w-5 h-5" /> Network Map: {data.domain}
           </div>
           <button onClick={onClose} className="text-white/60 hover:text-[#c8ff3d] cursor-pointer">
             <X className="w-5 h-5" />
@@ -464,14 +464,14 @@ const TopologyModal = ({ data, onClose }: { data: AnalyzeResponse; onClose: () =
               <div className="text-[10px] text-white/60 mt-1">Registrar: {data.whois_domain?.registrar || 'UNKNOWN'} • Age: {data.whois_domain?.age_days || 0}d</div>
             </div>
             <div className="text-right">
-              <span className="px-2 py-1 bg-black border border-[#c8ff3d]/30 text-[#c8ff3d] text-[10px]">ROOT TARGET</span>
+              <span className="px-2 py-1 bg-black border border-[#c8ff3d]/30 text-[#c8ff3d] text-[10px]">MAIN DOMAIN</span>
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="border border-white/20 p-4 bg-[#0c100d] space-y-2">
               <div className="text-[#c8ff3d] font-bold text-[11px] flex items-center gap-1.5 border-b border-white/10 pb-1">
-                <Globe className="w-3.5 h-3.5" /> IP & Network Nodes
+                <Globe className="w-3.5 h-3.5" /> IP & Server Info
               </div>
               <div className="space-y-1 text-[11px]">
                 {data.address_lookup?.ipv4?.map((ip, i) => (
@@ -490,18 +490,18 @@ const TopologyModal = ({ data, onClose }: { data: AnalyzeResponse; onClose: () =
 
             <div className="border border-white/20 p-4 bg-[#0c100d] space-y-2">
               <div className="text-[#c8ff3d] font-bold text-[11px] flex items-center gap-1.5 border-b border-white/10 pb-1">
-                <Server className="w-3.5 h-3.5" /> Exposed Surface
+                <Server className="w-3.5 h-3.5" /> Open Ports & Flaws
               </div>
               <div className="text-[11px] space-y-1">
                 <div className="text-white/70">
                   Open Ports: <span className="text-[#c8ff3d]">{data.infrastructure?.ports?.join(', ') || 'None'}</span>
                 </div>
                 <div className="text-white/70">
-                  CVEs: <span className="text-[#ff4d4d] font-bold">{data.infrastructure?.vulns?.length || 0} Detected</span>
+                  Known Flaws: <span className="text-[#ff4d4d] font-bold">{data.infrastructure?.vulns?.length || 0} Found</span>
                 </div>
                 {data.address_lookup?.cdn_detected && (
                   <div className="text-[#ffaa00] text-[10px]">
-                    CDN: {data.address_lookup.cdn_detected}
+                    Protection: {data.address_lookup.cdn_detected}
                   </div>
                 )}
               </div>
@@ -509,13 +509,13 @@ const TopologyModal = ({ data, onClose }: { data: AnalyzeResponse; onClose: () =
 
             <div className="border border-white/20 p-4 bg-[#0c100d] space-y-2">
               <div className="text-[#c8ff3d] font-bold text-[11px] flex items-center gap-1.5 border-b border-white/10 pb-1">
-                <ShieldAlert className="w-3.5 h-3.5" /> Threat & Subdomains
+                <ShieldAlert className="w-3.5 h-3.5" /> Security & Subdomains
               </div>
               <div className="text-[11px] space-y-1">
-                <div>Verdict: <span className="font-bold text-[#c8ff3d]">{data.threat_intel?.verdict || 'CLEAN'}</span></div>
+                <div>Threat Check: <span className="font-bold text-[#c8ff3d]">{data.threat_intel?.verdict || 'CLEAN'}</span></div>
                 <div>Subdomains: <span className="text-white">{data.subdomains?.total || 0} Total</span></div>
-                <div>Active Probed: <span className="text-[#c8ff3d]">{data.subdomains?.active_probed || 0}</span></div>
-                <div>High-Risk Endpoints: <span className="text-[#ff4d4d] font-bold">{data.subdomains?.notable?.length || 0}</span></div>
+                <div>Active Checked: <span className="text-[#c8ff3d]">{data.subdomains?.active_probed || 0}</span></div>
+                <div>Important Sites: <span className="text-[#ff4d4d] font-bold">{data.subdomains?.notable?.length || 0}</span></div>
               </div>
             </div>
           </div>
@@ -547,7 +547,7 @@ const RawJsonModal = ({ data, onClose }: { data: AnalyzeResponse; onClose: () =>
       >
         <div className="flex justify-between items-center border-b border-white/20 pb-3 mb-4 shrink-0">
           <div className="flex items-center gap-2 text-[#c8ff3d] font-label text-sm uppercase tracking-widest font-bold">
-            <FileCode className="w-5 h-5" /> Raw Telemetry Ledger: {data.domain}
+            <FileCode className="w-5 h-5" /> Raw Data (JSON): {data.domain}
           </div>
           <div className="flex items-center gap-3">
             <button
@@ -576,7 +576,7 @@ export default function App() {
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [data, setData] = useState<AnalyzeResponse | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
-  const [activeTab, setActiveTab] = useState<'Overview' | 'Network & DNS' | 'Threat Radar' | 'Tech Stack' | 'Subdomains & History'>('Overview');
+  const [activeTab, setActiveTab] = useState<'Overview' | 'Network & DNS' | 'Threats & Ports' | 'Tech Stack' | 'Subdomains & History'>('Overview');
   const [legalModal, setLegalModal] = useState<'privacy' | 'terms' | null>(null);
   const [showTopology, setShowTopology] = useState(false);
   const [showRawJson, setShowRawJson] = useState(false);
@@ -593,7 +593,6 @@ export default function App() {
   const smoothMouseX = useSpring(mouseX, springConfig);
   const smoothMouseY = useSpring(mouseY, springConfig);
 
-  // Dynamic Parallax Shifts
   const bgGridX = useTransform(smoothMouseX, [-800, 800], [-18, 18]);
   const bgGridY = useTransform(smoothMouseY, [-600, 600], [-18, 18]);
   const floatReticleX = useTransform(smoothMouseX, [-800, 800], [30, -30]);
@@ -612,7 +611,6 @@ export default function App() {
   // System Status State
   const [serverStatus, setServerStatus] = useState<'checking' | 'waking' | 'awake' | 'offline'>('checking');
 
-  // Load scan history from localStorage
   useEffect(() => {
     try {
       const saved = localStorage.getItem('webtrace_history');
@@ -631,19 +629,19 @@ export default function App() {
         const prevIp = prev.address_lookup?.ipv4?.[0];
         const currIp = current.address_lookup?.ipv4?.[0];
         if (prevIp && currIp && prevIp !== currIp) {
-          diffs.push(`IP address changed from ${prevIp} ➔ ${currIp}`);
+          diffs.push(`Server IP address changed from ${prevIp} ➔ ${currIp}`);
         }
 
         const prevTotal = prev.subdomains?.total || 0;
         const currTotal = current.subdomains?.total || 0;
         if (currTotal > prevTotal) {
-          diffs.push(`+ ${currTotal - prevTotal} new subdomain(s) discovered since previous scan`);
+          diffs.push(`+ ${currTotal - prevTotal} new subdomain(s) found since last scan`);
         }
 
         const prevDays = prev.ssl?.days_remaining;
         const currDays = current.ssl?.days_remaining;
         if (prevDays != null && currDays != null && prevDays !== currDays) {
-          diffs.push(`SSL lifespan changed: ${currDays} days remaining (was ${prevDays}d)`);
+          diffs.push(`SSL certificate expiry updated: ${currDays} days remaining`);
         }
       }
 
@@ -656,7 +654,6 @@ export default function App() {
     } catch {}
   };
 
-  // Backend Health Ping
   useEffect(() => {
     const apiUrl = import.meta.env.VITE_API_URL || 'https://webtrace.phish-x.workers.dev';
     fetch(`${apiUrl}/api/ping`)
@@ -701,7 +698,7 @@ export default function App() {
       })
       .catch((err) => {
         setStatus("error");
-        setErrorMsg(err.message || "Failed to execute scan. Check network connectivity.");
+        setErrorMsg(err.message || "Unable to complete scan. Please verify the domain and try again.");
       });
   };
 
@@ -716,62 +713,61 @@ export default function App() {
   const handleExportMarkdown = () => {
     if (!data) return;
     const risk = computeRiskScore(data);
-    const mdContent = `# ⚡ WEBTRACE SECURITY ASSESSMENT & PENTEST AUDIT: ${data.domain}
+    const mdContent = `# ⚡ WEBTRACE SECURITY REPORT: ${data.domain}
 Generated: ${new Date().toUTCString()}
-Attack Surface Security Score: ${risk.score}/100 [${risk.label}]
+Security Score: ${risk.score}/100 [${risk.label}]
 
 ================================================================================
-1. 🧠 EXECUTIVE AI ASSESSMENT
+1. 🧠 AI SECURITY SUMMARY
 ================================================================================
 ${data.ai_explanation?.summary || 'N/A'}
 
 ================================================================================
-2. 🌐 NETWORK & INFRASTRUCTURE TOPOLOGY
+2. 🌐 SERVER & NETWORK INFO
 ================================================================================
 - Target Domain: ${data.domain}
-- Canonical CNAME: ${data.address_lookup?.canonical || data.domain}
-- Resolved IPv4 Nodes: ${data.address_lookup?.ipv4?.join(', ') || 'None'}
-- Network Owner / ISP: ${data.whois_network?.org || 'N/A'} (${data.whois_network?.country || 'N/A'})
-- ASN Block: ${data.whois_network?.asn || 'N/A'}
-- CIDR Routing: ${data.whois_network?.network || 'N/A'}
-- CDN / Edge Shielding: ${data.address_lookup?.cdn_detected || 'None (Direct Origin Exposed)'}
+- Server IP Addresses: ${data.address_lookup?.ipv4?.join(', ') || 'None'}
+- Hosting Provider / ISP: ${data.whois_network?.org || 'N/A'} (${data.whois_network?.country || 'N/A'})
+- ASN Number: ${data.whois_network?.asn || 'N/A'}
+- Network Block: ${data.whois_network?.network || 'N/A'}
+- Cloud Protection / CDN: ${data.address_lookup?.cdn_detected || 'None (Direct IP Exposed)'}
 
 ================================================================================
-3. 💻 TECHNOLOGY STACK & DEFENSE HEADERS
+3. 💻 WEBSITE TECHNOLOGY & BROWSER SECURITY
 ================================================================================
-- Server Signature: ${data.tech_stack?.server || 'Hidden / None'}
-- Technologies Identified: ${data.tech_stack?.tech_stack?.join(', ') || 'None identified'}
-- HSTS (Strict-Transport-Security): ${data.tech_stack?.security_headers?.hsts?.present ? 'ENFORCED' : 'MISSING'}
-- CSP (Content-Security-Policy): ${data.tech_stack?.security_headers?.csp?.present ? 'CONFIGURED' : 'MISSING'}
-- X-Frame-Options: ${data.tech_stack?.security_headers?.x_frame_options?.present ? 'CONFIGURED' : 'MISSING'}
+- Web Server: ${data.tech_stack?.server || 'Hidden / None'}
+- Technologies Detected: ${data.tech_stack?.tech_stack?.join(', ') || 'None detected'}
+- HTTPS Enforced (HSTS): ${data.tech_stack?.security_headers?.hsts?.present ? 'ENABLED' : 'MISSING'}
+- Script Protection (CSP): ${data.tech_stack?.security_headers?.csp?.present ? 'ENABLED' : 'MISSING'}
+- Anti-Clickjacking (X-Frame): ${data.tech_stack?.security_headers?.x_frame_options?.present ? 'ENABLED' : 'MISSING'}
 
 ================================================================================
-4. 📧 EMAIL SECURITY & AUTHENTICATION
+4. 📧 EMAIL PROTECTION & SPOOFING DEFENSE
 ================================================================================
-- SPF Policy: ${data.dns_records?.has_spf ? 'CONFIGURED' : 'MISSING'}
+- SPF Anti-Spoofing: ${data.dns_records?.has_spf ? 'CONFIGURED' : 'MISSING'}
 - DMARC Policy: ${data.dns_records?.has_dmarc ? 'CONFIGURED' : 'MISSING'}
-- DKIM Selectors: ${data.dns_records?.dkim_found ? 'CONFIGURED' : 'MISSING'}
+- DKIM Signature: ${data.dns_records?.dkim_found ? 'CONFIGURED' : 'MISSING'}
 
 ================================================================================
-5. 🎯 ATTACK SURFACE EXPOSURE & CVES
+5. 🎯 OPEN PORTS & KNOWN FLAWS
 ================================================================================
-- Open Ports Detected: ${data.infrastructure?.ports?.join(', ') || 'None detected'}
-- Exposed CVEs: ${data.infrastructure?.vulns?.join(', ') || 'None detected'}
-- Total Subdomains Tracked: ${data.subdomains?.total || 0} (Active DoH Probed: ${data.subdomains?.active_probed || 0})
-- Sensitive Endpoints: ${data.subdomains?.notable?.join(', ') || 'None'}
+- Open Server Ports: ${data.infrastructure?.ports?.join(', ') || 'None detected'}
+- Software Vulnerabilities (CVEs): ${data.infrastructure?.vulns?.join(', ') || 'None detected'}
+- Subdomains Found: ${data.subdomains?.total || 0}
+- Notable Sites: ${data.subdomains?.notable?.join(', ') || 'None'}
 
 ================================================================================
-6. 🚨 MULTI-ENGINE THREAT INTEL VERDICT
+6. 🚨 MALWARE & THREAT CHECK
 ================================================================================
-- Aggregate Threat Verdict: ${data.threat_intel?.verdict || 'CLEAN'}
-- Engines Flagged: ${data.threat_intel?.flagged_by || 0}
+- Threat Status: ${data.threat_intel?.verdict || 'CLEAN'}
+- Blacklist Flags: ${data.threat_intel?.flagged_by || 0}
 `;
 
     const blob = new Blob([mdContent], { type: 'text/markdown' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `webtrace_pentest_report_${data.domain.replace(/[^a-zA-Z0-9]/g, '_')}.md`;
+    a.download = `webtrace_security_report_${data.domain.replace(/[^a-zA-Z0-9]/g, '_')}.md`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -790,11 +786,11 @@ ${data.ai_explanation?.summary || 'N/A'}
     return list;
   }, [data, subdomainSearch]);
 
-  const PRESET_TARGETS = ['google.com', 'github.com', 'cloudflare.com', 'ktiwari.in', 'wikipedia.org'];
-  const TABS: Array<'Overview' | 'Network & DNS' | 'Threat Radar' | 'Tech Stack' | 'Subdomains & History'> = [
+  const PRESET_TARGETS = ['google.com', 'github.com', 'cloudflare.com', 'jainuniversity.ac.in', 'ktiwari.in'];
+  const TABS: Array<'Overview' | 'Network & DNS' | 'Threats & Ports' | 'Tech Stack' | 'Subdomains & History'> = [
     'Overview',
     'Network & DNS',
-    'Threat Radar',
+    'Threats & Ports',
     'Tech Stack',
     'Subdomains & History'
   ];
@@ -804,7 +800,6 @@ ${data.ai_explanation?.summary || 'N/A'}
       onMouseMove={handleGlobalMouseMove}
       className="flex flex-col h-screen overflow-hidden bg-[#050706] text-[#e7ebe6] relative selection:bg-[#c8ff3d] selection:text-[#050706] font-body select-none"
     >
-      {/* Interactive Spotlight Glow following mouse */}
       <div
         className="pointer-events-none fixed inset-0 z-0 transition-opacity duration-300"
         style={{
@@ -812,13 +807,11 @@ ${data.ai_explanation?.summary || 'N/A'}
         }}
       />
 
-      {/* Parallax Background Grid */}
       <motion.div
         className="fixed inset-0 pointer-events-none z-0 cyber-grid opacity-75"
         style={{ x: bgGridX, y: bgGridY }}
       />
 
-      {/* Floating Parallax Reticles & Wireframe Corners */}
       <motion.div
         className="fixed top-16 right-16 pointer-events-none z-0 opacity-15 hidden lg:block"
         style={{ x: floatReticleX, y: floatReticleY }}
@@ -837,7 +830,7 @@ ${data.ai_explanation?.summary || 'N/A'}
       <div className="flex flex-1 overflow-hidden relative z-10 w-full max-w-[1440px] mx-auto">
         <main className="flex-1 overflow-y-auto p-4 md:p-8 relative z-10">
 
-          {/* Header Title & ASCII Art with subtle parallax depth */}
+          {/* Header & ASCII Title */}
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -856,10 +849,10 @@ ${data.ai_explanation?.summary || 'N/A'}
        _____\//\\\__\//\\\______\/\\\\\\\\\\\\\\\_\/\\\\\\\\\\\\\/________\/\\\_______\/\\\______\//\\\_\/\\\_______\/\\\____\////\\\\\\\\\_\/\\\\\\\\\\\\\\\_ 
         ______\///____\///_______\///////////////__\/////////////__________\///________\///________\///__\///________\///________\/////////__\///////////////__`}
               </pre>
-              <div className="text-right font-label text-[10px] uppercase tracking-[0.2em] text-[#88908a] border-r-2 border-[#c8ff3d]/50 pr-4">
-                <div><span className="text-[#c8ff3d]">op_mode:</span> OSINT_RECONSOLE</div>
-                <div><span className="text-[#c8ff3d]">recon_engine:</span> ACTIVE_DOH_15</div>
-                <div><span className="text-[#c8ff3d]">defense:</span> SSRF_FIREWALL</div>
+              <div className="text-right font-label text-[10px] uppercase tracking-[0.16em] text-[#88908a] border-r-2 border-[#c8ff3d]/50 pr-4">
+                <div><span className="text-[#c8ff3d]">Mode:</span> Website Scanner</div>
+                <div><span className="text-[#c8ff3d]">Engine:</span> Live Probing</div>
+                <div><span className="text-[#c8ff3d]">Safety:</span> Protected</div>
               </div>
             </div>
 
@@ -867,14 +860,14 @@ ${data.ai_explanation?.summary || 'N/A'}
             <div className="bg-[#080b09] flex flex-col md:flex-row items-center overflow-hidden border border-white/25 shadow-[0_0_30px_rgba(0,0,0,0.8)] focus-within:border-[#c8ff3d] focus-within:shadow-[0_0_25px_rgba(200,255,61,0.15)] transition-all">
               <div className="flex-1 flex items-center px-6 py-4 font-label text-[#c8ff3d] text-lg w-full bg-[#040605]">
                 <span className="opacity-60 mr-3 animate-pulse">&gt;</span>
-                <span className="text-[#c8ff3d]/80 mr-3 uppercase font-bold text-sm">analyze_domain</span>
+                <span className="text-[#c8ff3d]/80 mr-3 uppercase font-bold text-sm">Search</span>
                 <input
                   className="bg-transparent border-none focus:ring-0 text-[#e7ebe6] w-full placeholder:text-white/20 uppercase tracking-wider outline-none font-medium text-sm md:text-base font-mono"
                   type="text"
                   value={targetUrl}
                   onChange={(e) => setTargetUrl(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleRunAnalysis()}
-                  placeholder="ENTER DOMAIN OR IP (E.G. KTIWARI.IN)"
+                  placeholder="ENTER DOMAIN OR IP (E.G. GOOGLE.COM)"
                   spellCheck="false"
                 />
               </div>
@@ -885,14 +878,14 @@ ${data.ai_explanation?.summary || 'N/A'}
               >
                 <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out"></div>
                 <span className="relative z-10 flex items-center gap-2 justify-center font-bold">
-                  {status === "loading" ? <><Loader2 className="w-4 h-4 animate-spin" /> RUNNING...</> : "EXECUTE"}
+                  {status === "loading" ? <><Loader2 className="w-4 h-4 animate-spin" /> SCANNING...</> : "SCAN NOW"}
                 </span>
               </button>
             </div>
 
-            {/* Target Presets & Quick Chips */}
+            {/* Presets */}
             <div className="flex items-center gap-2 mt-3 flex-wrap text-[10px] font-mono">
-              <span className="text-[#88908a] uppercase tracking-wider">PRESETS:</span>
+              <span className="text-[#88908a] uppercase tracking-wider">QUICK EXAMPLES:</span>
               {PRESET_TARGETS.map(t => (
                 <button
                   key={t}
@@ -904,7 +897,7 @@ ${data.ai_explanation?.summary || 'N/A'}
               ))}
               {scanHistory.length > 0 && (
                 <>
-                  <span className="text-white/25 ml-2">| RECENT:</span>
+                  <span className="text-white/25 ml-2">| RECENT SCANS:</span>
                   {scanHistory.slice(0, 3).map(h => (
                     <button
                       key={h}
@@ -925,7 +918,7 @@ ${data.ai_explanation?.summary || 'N/A'}
             )}
           </motion.div>
 
-          {/* Loading Animation HUD */}
+          {/* Loading HUD */}
           {status === 'loading' && (
             <div className="flex flex-col items-center justify-center py-24 text-[#c8ff3d]">
               <div className="relative w-28 h-28">
@@ -934,20 +927,20 @@ ${data.ai_explanation?.summary || 'N/A'}
                 <div className="w-16 h-16 border border-[#c8ff3d]/40 rounded-full absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-ping opacity-25"></div>
                 <Activity className="w-8 h-8 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-90" />
               </div>
-              <div className="mt-8 font-label text-sm uppercase tracking-[0.3em] animate-pulse">Running Deep Reconnaissance & Active Probing...</div>
-              <div className="mt-2 font-mono text-[10px] text-[#7d877f]">Querying DNS, RDAP, Shodan, Threat Feeds, Tech Stack & AI Briefing</div>
+              <div className="mt-8 font-label text-sm uppercase tracking-[0.25em] animate-pulse">Running Full Domain & Security Scan...</div>
+              <div className="mt-2 font-mono text-[10px] text-[#7d877f]">Checking Server IP, DNS Records, SSL Certificate, Threats & AI Summary</div>
             </div>
           )}
 
-          {/* Results Display */}
+          {/* Results */}
           {status === 'success' && data && (
             <div className="flex flex-col gap-6">
 
-              {/* Scan Delta / Historical Comparison Banner */}
+              {/* Scan Changes Alert */}
               {scanDiffAlert.length > 0 && (
                 <div className="bg-[#c8ff3d]/10 border border-[#c8ff3d]/30 p-3.5 font-label text-xs">
                   <div className="flex items-center gap-2 text-[#c8ff3d] font-bold uppercase tracking-wider mb-1">
-                    <GitCompare className="w-4 h-4" /> Historical Delta Alert (Changes Since Previous Scan)
+                    <GitCompare className="w-4 h-4" /> Changes Since Your Last Scan
                   </div>
                   <div className="space-y-1 text-[#e7ebe6]/90 font-mono text-[11px] pl-6">
                     {scanDiffAlert.map((diff, i) => (
@@ -957,17 +950,17 @@ ${data.ai_explanation?.summary || 'N/A'}
                 </div>
               )}
 
-              {/* Action Bar & Quick Tools */}
+              {/* Action Bar */}
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/20 pb-4 font-label text-xs">
                 <div>
                   <div className="flex items-baseline gap-3">
                     <h1 className="text-2xl sm:text-3xl font-bold tracking-[-0.05em] text-[#e7ebe6]">{data.domain}</h1>
-                    <span className="text-xs text-[#707871]">/ recon results</span>
+                    <span className="text-xs text-[#707871]">/ scan report</span>
                   </div>
                   <div className="mt-1 flex items-center gap-2 text-xs text-[#a5ada6]">
-                    <span>Canonical: {data.address_lookup?.canonical || data.domain}</span>
+                    <span>Domain: {data.address_lookup?.canonical || data.domain}</span>
                     <span className="text-white/30">·</span>
-                    <span className="flex items-center gap-1.5 text-[#c8ff3d]"><span className="h-1.5 w-1.5 bg-[#c8ff3d]" />PENTEST_GRADE</span>
+                    <span className="flex items-center gap-1.5 text-[#c8ff3d]"><span className="h-1.5 w-1.5 bg-[#c8ff3d]" />ANALYSIS COMPLETE</span>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
@@ -975,24 +968,24 @@ ${data.ai_explanation?.summary || 'N/A'}
                     onClick={() => setShowTopology(true)}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-[#080b09] hover:bg-[#c8ff3d]/10 border border-white/25 text-[#c8ff3d] text-[11px] uppercase tracking-wider transition-colors cursor-pointer"
                   >
-                    <Layers className="w-3.5 h-3.5" /> Topology Map
+                    <Layers className="w-3.5 h-3.5" /> Network Map
                   </button>
                   <button
                     onClick={handleExportMarkdown}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-[#080b09] hover:bg-[#c8ff3d]/10 border border-white/25 text-[#d4dad4] hover:text-[#c8ff3d] text-[11px] uppercase tracking-wider transition-colors cursor-pointer"
                   >
-                    <Download className="w-3.5 h-3.5" /> Export Report (.md)
+                    <Download className="w-3.5 h-3.5" /> Download Report
                   </button>
                   <button
                     onClick={() => setShowRawJson(true)}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-[#080b09] hover:bg-[#c8ff3d]/10 border border-white/25 text-[#d4dad4] hover:text-[#c8ff3d] text-[11px] uppercase tracking-wider transition-colors cursor-pointer"
                   >
-                    <FileCode className="w-3.5 h-3.5" /> Raw JSON
+                    <FileCode className="w-3.5 h-3.5" /> Raw Data (JSON)
                   </button>
                 </div>
               </div>
 
-              {/* Navigation Tabs from New Redesign */}
+              {/* Simplified Tab Names */}
               <nav className="flex overflow-x-auto border-y border-white/25" aria-label="Dashboard sections">
                 {TABS.map((tab) => (
                   <button
@@ -1015,15 +1008,15 @@ ${data.ai_explanation?.summary || 'N/A'}
               {/* ── TAB 1: OVERVIEW ── */}
               {activeTab === 'Overview' && (
                 <div className="space-y-6">
-                  {/* Hero Bento Grid */}
+                  {/* Bento Hero Grid with simplified labels */}
                   <div className="grid grid-cols-1 gap-3 md:grid-cols-4 lg:grid-cols-12">
-                    {/* Big Exposure Risk Tile */}
+                    {/* Big Security Score */}
                     {riskAssessment && (
                       <Tile className="min-h-[300px] p-6 md:col-span-2 lg:col-span-5 lg:row-span-2 lg:p-8">
                         <div className="flex h-full flex-col justify-between">
                           <div className="flex items-start justify-between">
-                            <TileLabel icon={<Activity size={13} />}>Exposure Health Index</TileLabel>
-                            <span className="text-[10px] uppercase tracking-[0.12em] text-[#657068]">XR / 01</span>
+                            <TileLabel icon={<Activity size={13} />}>Security Score</TileLabel>
+                            <span className="text-[10px] uppercase tracking-[0.12em] text-[#657068]">SCORE / 100</span>
                           </div>
                           <div>
                             <div className={`font-mono text-8xl sm:text-9xl font-bold leading-[0.8] tracking-[-0.1em] ${riskAssessment.color}`}>
@@ -1034,7 +1027,7 @@ ${data.ai_explanation?.summary || 'N/A'}
                                 {riskAssessment.label}
                               </span>
                               <span className="text-xs text-[#8c958e]">
-                                {riskAssessment.penalties.length === 0 ? 'within safe threshold' : `${riskAssessment.penalties.length} penalty factors`}
+                                {riskAssessment.penalties.length === 0 ? 'No security issues found' : `${riskAssessment.penalties.length} item(s) to check`}
                               </span>
                             </div>
                           </div>
@@ -1042,12 +1035,12 @@ ${data.ai_explanation?.summary || 'N/A'}
                       </Tile>
                     )}
 
-                    {/* Metric 1: Threat Feed Verdict */}
+                    {/* Metric 1: Threat Check */}
                     <Tile className="min-h-[150px] p-5 md:col-span-2 lg:col-span-4">
                       <div className="flex h-full flex-col justify-between">
                         <div className="flex justify-between">
-                          <TileLabel icon={<ShieldCheck size={13} />}>Threat Feed Verdict</TileLabel>
-                          <span className="text-[10px] text-[#657068]">TF / 05</span>
+                          <TileLabel icon={<ShieldCheck size={13} />}>Malware & Threat Check</TileLabel>
+                          <span className="text-[10px] text-[#657068]">5 SCANNERS</span>
                         </div>
                         <div>
                           <div className="flex items-center gap-3">
@@ -1057,7 +1050,7 @@ ${data.ai_explanation?.summary || 'N/A'}
                             {data.threat_intel?.verdict === 'CLEAN' && <Check size={24} className="text-[#c8ff3d]" />}
                           </div>
                           <p className="mt-2 text-xs leading-5 text-[#7d877f]">
-                            {data.threat_intel?.flagged_by === 0 ? 'No confirmed malicious indicators across feeds.' : `Flagged by ${data.threat_intel?.flagged_by} security vendor(s).`}
+                            {data.threat_intel?.flagged_by === 0 ? 'Not found on any malware or spam blacklists.' : `Flagged on ${data.threat_intel?.flagged_by} security blacklist(s).`}
                           </p>
                         </div>
                       </div>
@@ -1066,7 +1059,7 @@ ${data.ai_explanation?.summary || 'N/A'}
                     {/* Metric 2: Subdomains */}
                     <Tile className="min-h-[150px] p-5 md:col-span-2 lg:col-span-3">
                       <div className="flex h-full flex-col justify-between">
-                        <TileLabel icon={<Server size={13} />}>Subdomains</TileLabel>
+                        <TileLabel icon={<Server size={13} />}>Subdomains Found</TileLabel>
                         <div>
                           <div className="flex items-end gap-3">
                             <span className="text-5xl font-bold leading-none tracking-[-0.1em]">{data.subdomains?.total ?? 0}</span>
@@ -1074,7 +1067,7 @@ ${data.ai_explanation?.summary || 'N/A'}
                           </div>
                           <div className="mt-3 flex items-center gap-2 border-t border-white/15 pt-2 text-[10px] uppercase tracking-[0.1em] text-[#aab2ab]">
                             <span className={`h-1.5 w-1.5 ${(data.subdomains?.notable?.length ?? 0) > 0 ? 'bg-[#ff4d4d]' : 'bg-[#c8ff3d]'}`} />
-                            {String(data.subdomains?.notable?.length ?? 0).padStart(2, '0')} high-value targets
+                            {String(data.subdomains?.notable?.length ?? 0).padStart(2, '0')} important sites
                           </div>
                         </div>
                       </div>
@@ -1083,16 +1076,16 @@ ${data.ai_explanation?.summary || 'N/A'}
                     {/* Metric 3: SSL Certificate */}
                     <Tile className="min-h-[150px] p-5 md:col-span-2 lg:col-span-4">
                       <div className="flex h-full flex-col justify-between">
-                        <TileLabel icon={<LockKeyhole size={13} />}>SSL Certificate</TileLabel>
+                        <TileLabel icon={<LockKeyhole size={13} />}>Website SSL (HTTPS)</TileLabel>
                         <div>
                           <div className="flex items-center gap-3">
                             <span className={`text-3xl font-bold tracking-[-0.08em] ${data.ssl?.valid ? 'text-[#c8ff3d]' : 'text-[#ff4d4d]'}`}>
-                              {data.ssl?.valid ? 'VALID' : 'UNTRUSTED'}
+                              {data.ssl?.valid ? 'SECURE' : 'NOT SECURE'}
                             </span>
                             <span className={`h-2 w-2 ${data.ssl?.valid ? 'bg-[#c8ff3d]' : 'bg-[#ff4d4d]'}`} />
                           </div>
                           <p className="mt-2 text-xs text-[#7d877f]">
-                            {data.ssl?.issuer_org || 'Unknown CA'} · {data.ssl?.days_remaining != null ? `expires in ${data.ssl.days_remaining}d` : 'no expiry'}
+                            {data.ssl?.issuer_org || 'Certificate Provider'} · {data.ssl?.days_remaining != null ? `expires in ${data.ssl.days_remaining} days` : 'no expiry'}
                           </p>
                         </div>
                       </div>
@@ -1107,7 +1100,7 @@ ${data.ai_explanation?.summary || 'N/A'}
                             <span className="text-5xl font-bold leading-none tracking-[-0.1em]">
                               {data.whois_domain?.age_days != null ? (data.whois_domain.age_days / 365.25).toFixed(1) : '---'}
                             </span>
-                            <span className="text-sm text-[#8c958e]">years</span>
+                            <span className="text-sm text-[#8c958e]">years old</span>
                           </div>
                           <p className="mt-3 text-[10px] uppercase tracking-[0.1em] text-[#7d877f]">
                             registered {data.whois_domain?.created ? data.whois_domain.created.split('T')[0] : 'UNKNOWN'}
@@ -1117,17 +1110,17 @@ ${data.ai_explanation?.summary || 'N/A'}
                     </Tile>
                   </div>
 
-                  {/* Structured AI Pentest Briefing Tile */}
+                  {/* AI Summary Card */}
                   {data.ai_explanation && (
                     <section className="border border-white/20 bg-[#080b09] p-6 terminal-glow relative" aria-labelledby="briefing-title">
                       <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-4 pb-3 border-b border-white/15">
                         <div className="flex items-center gap-3">
                           <Brain className="w-5 h-5 text-[#c8ff3d]" />
                           <h2 id="briefing-title" className="text-xs font-bold uppercase tracking-[0.18em] text-[#c8ff3d]">
-                            Structured AI Pentest Briefing
+                            AI Security Summary & Advice
                           </h2>
                           <span className="border border-white/20 px-2 py-0.5 text-[9px] uppercase tracking-[0.14em] text-[#747e76]">
-                            {data.ai_explanation.engine || 'AI Engine'}
+                            AI Analysis
                           </span>
                         </div>
                         <button
@@ -1136,7 +1129,7 @@ ${data.ai_explanation?.summary || 'N/A'}
                           className="flex items-center gap-2 border border-white/25 px-3 py-1.5 text-[10px] uppercase tracking-[0.14em] text-[#a9b1aa] hover:border-[#c8ff3d] hover:text-[#c8ff3d] transition-colors cursor-pointer"
                         >
                           <RefreshCw size={12} className={retryingBrief ? 'animate-spin' : ''} />
-                          {retryingBrief ? 'Refreshed' : 'Re-analyze'}
+                          {retryingBrief ? 'Refreshed' : 'Re-run AI'}
                         </button>
                       </div>
 
@@ -1144,7 +1137,7 @@ ${data.ai_explanation?.summary || 'N/A'}
                         {data.ai_explanation.available ? (
                           data.ai_explanation.summary
                         ) : (
-                          <StatusBadge status="unavailable" label="AI BRIEFING UNAVAILABLE" />
+                          <StatusBadge status="unavailable" label="AI SUMMARY TEMPORARILY UNAVAILABLE" />
                         )}
                       </div>
                     </section>
@@ -1155,125 +1148,127 @@ ${data.ai_explanation?.summary || 'N/A'}
               {/* ── TAB 2: NETWORK & DNS ── */}
               {activeTab === 'Network & DNS' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Server Location & Domain Info */}
                   <Tile className="p-6 flex flex-col gap-6">
-                    <SectionHeader title="Network Identity & Routing" icon={Globe} />
+                    <SectionHeader title="Server IP & Domain Info" icon={Globe} />
 
                     <div>
                       <div className="text-[10px] font-label text-[#c8ff3d] uppercase border-b border-white/10 pb-1 mb-3 flex justify-between">
-                        <span>Address Lookup</span>
-                        <span className="text-[#88908a]">Cloudflare DoH</span>
+                        <span>IP Address & Server Location</span>
+                        <span className="text-[#88908a]">DNS Query</span>
                       </div>
                       {data.address_lookup?.available ? (
                         <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs font-mono uppercase">
-                          <span className="text-[#88908a]">Canonical:</span>
+                          <span className="text-[#88908a]">Primary Domain:</span>
                           <span className="text-right truncate flex items-center justify-end gap-1">
                             {data.address_lookup.canonical || 'N/A'}
                             <CopyBtn text={data.address_lookup.canonical} />
                           </span>
-                          <span className="text-[#88908a]">IPv4 Nodes:</span>
+                          <span className="text-[#88908a]">Server IPv4 Address:</span>
                           <span className="text-right text-[#c8ff3d] truncate flex items-center justify-end gap-1">
                             {data.address_lookup.ipv4?.join(', ') || 'N/A'}
                             <CopyBtn text={data.address_lookup.ipv4?.[0]} />
                           </span>
-                          <span className="text-[#88908a]">IPv6 Nodes:</span>
+                          <span className="text-[#88908a]">Server IPv6 Address:</span>
                           <span className="text-right truncate opacity-70">{data.address_lookup.ipv6?.length ? data.address_lookup.ipv6[0] : 'N/A'}</span>
                           {data.address_lookup.cdn_detected && (
                             <>
-                              <span className="text-[#88908a]">CDN Detected:</span>
-                              <span className="text-right text-[#ffaa00] uppercase">{data.address_lookup.cdn_detected} (Proxied)</span>
+                              <span className="text-[#88908a]">Cloud Protection (CDN):</span>
+                              <span className="text-right text-[#ffaa00] uppercase">{data.address_lookup.cdn_detected}</span>
                             </>
                           )}
                         </div>
                       ) : (
-                        <StatusBadge status="unavailable" label="ADDRESS LOOKUP UNAVAILABLE" />
+                        <StatusBadge status="unavailable" label="IP ADDRESS UNAVAILABLE" />
                       )}
                     </div>
 
                     <div>
                       <div className="text-[10px] font-label text-[#c8ff3d] uppercase border-b border-white/10 pb-1 mb-3 flex justify-between">
-                        <span>Domain Registry (WHOIS)</span>
+                        <span>Domain Registration (WHOIS)</span>
                         <span className="text-[#88908a]">{data.whois_domain?.source || 'RDAP'}</span>
                       </div>
                       {data.whois_domain?.available ? (
                         <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs font-mono uppercase">
-                          <span className="text-[#88908a]">Registrar:</span>
+                          <span className="text-[#88908a]">Domain Registrar:</span>
                           <span className="text-right text-[#c8ff3d]/90 truncate">{data.whois_domain.registrar || 'UNKNOWN'}</span>
                           <span className="text-[#88908a]">Age:</span>
                           <span className="text-right">{data.whois_domain.age_days != null ? `${data.whois_domain.age_days} Days` : 'UNKNOWN'}</span>
-                          <span className="text-[#88908a]">Created:</span>
+                          <span className="text-[#88908a]">Registration Date:</span>
                           <span className="text-right truncate opacity-80">{data.whois_domain.created ? data.whois_domain.created.split('T')[0] : 'N/A'}</span>
-                          <span className="text-[#88908a]">Expires:</span>
+                          <span className="text-[#88908a]">Expiration Date:</span>
                           <span className="text-right truncate opacity-80">{data.whois_domain.expires ? data.whois_domain.expires.split('T')[0] : 'N/A'}</span>
-                          <span className="text-[#88908a]">DNSSEC:</span>
+                          <span className="text-[#88908a]">DNS Security (DNSSEC):</span>
                           <span className={`text-right font-bold ${data.whois_domain.dnssec === 'SIGNED' ? 'text-[#c8ff3d]' : 'text-[#ffaa00]'}`}>
-                            {data.whois_domain.dnssec || 'UNSIGNED'}
+                            {data.whois_domain.dnssec === 'SIGNED' ? 'SIGNED (SECURE)' : 'UNSIGNED'}
                           </span>
                         </div>
                       ) : (
-                        <StatusBadge status="unavailable" label="WHOIS REGISTRY UNAVAILABLE" />
+                        <StatusBadge status="unavailable" label="REGISTRATION INFO UNAVAILABLE" />
                       )}
                     </div>
 
                     <div>
                       <div className="text-[10px] font-label text-[#c8ff3d] uppercase border-b border-white/10 pb-1 mb-3 flex justify-between">
-                        <span>IP Block Authority & ASN</span>
-                        <span className="text-[#88908a]">Universal RDAP</span>
+                        <span>Hosting Provider & Country</span>
+                        <span className="text-[#88908a]">IP WHOIS</span>
                       </div>
                       {data.whois_network?.available ? (
                         <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs font-mono uppercase">
-                          <span className="text-[#88908a]">ISP / Org:</span>
+                          <span className="text-[#88908a]">Hosting Provider:</span>
                           <span className="text-right text-[#c8ff3d] truncate">{data.whois_network.org || data.whois_network.net_name || 'UNKNOWN'}</span>
-                          <span className="text-[#88908a]">ASN:</span>
+                          <span className="text-[#88908a]">ASN Number:</span>
                           <span className="text-right">{data.whois_network.asn || 'N/A'}</span>
-                          <span className="text-[#88908a]">CIDR:</span>
+                          <span className="text-[#88908a]">IP Subnet Range:</span>
                           <span className="text-right truncate">{data.whois_network.network || 'N/A'}</span>
-                          <span className="text-[#88908a]">Country:</span>
+                          <span className="text-[#88908a]">Server Country:</span>
                           <span className="text-right">{data.whois_network.country || 'N/A'}</span>
                         </div>
                       ) : (
-                        <StatusBadge status="unavailable" label="NETWORK WHOIS UNAVAILABLE" />
+                        <StatusBadge status="unavailable" label="HOSTING INFO UNAVAILABLE" />
                       )}
                     </div>
                   </Tile>
 
+                  {/* SSL & Email Protection */}
                   <Tile className="p-6 flex flex-col gap-6">
-                    <SectionHeader title="Cryptographic & Email Posture" icon={Database} />
+                    <SectionHeader title="SSL Certificate & Email Protection" icon={Database} />
 
                     <div>
-                      <div className="text-[10px] font-label text-[#c8ff3d] uppercase border-b border-white/10 pb-1 mb-3">X.509 Certificate Profile</div>
+                      <div className="text-[10px] font-label text-[#c8ff3d] uppercase border-b border-white/10 pb-1 mb-3">SSL Security Certificate</div>
                       {data.ssl?.available ? (
                         <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs font-mono uppercase">
-                          <span className="text-[#88908a]">Verdict:</span>
+                          <span className="text-[#88908a]">Status:</span>
                           <span className={`text-right font-bold ${data.ssl.valid ? 'text-[#c8ff3d]' : 'text-[#ff4d4d]'}`}>
                             {data.ssl.valid ? 'VALID CERTIFICATE' : 'INVALID / UNTRUSTED'}
                           </span>
-                          <span className="text-[#88908a]">Issuer CA:</span>
+                          <span className="text-[#88908a]">Issued By:</span>
                           <span className="text-right truncate flex items-center justify-end gap-1">
                             {data.ssl.is_free_ca && <span className="bg-white/10 text-[8px] px-1 text-[#ffaa00]">FREE CA</span>}
                             {data.ssl.issuer_org || 'UNKNOWN'}
                           </span>
-                          <span className="text-[#88908a]">Lifespan:</span>
+                          <span className="text-[#88908a]">Days Remaining:</span>
                           <span className={`text-right ${data.ssl.days_remaining && data.ssl.days_remaining < 30 ? 'text-[#ff4d4d]' : 'opacity-80'}`}>
-                            {data.ssl.days_remaining != null ? `${data.ssl.days_remaining} Days Left` : 'N/A'}
+                            {data.ssl.days_remaining != null ? `${data.ssl.days_remaining} Days` : 'N/A'}
                           </span>
-                          <span className="text-[#88908a]">SAN Count:</span>
+                          <span className="text-[#88908a]">Domains Covered:</span>
                           <span className="text-right opacity-80">{data.ssl.san_count ?? data.ssl.sans?.length ?? 0} Domains</span>
                         </div>
                       ) : (
-                        <StatusBadge status="unavailable" label="CERTIFICATE PROFILE UNAVAILABLE" />
+                        <StatusBadge status="unavailable" label="SSL INFO UNAVAILABLE" />
                       )}
                     </div>
 
                     <div>
                       <div className="text-[10px] font-label text-[#c8ff3d] uppercase border-b border-white/10 pb-1 mb-3 flex items-center gap-1.5">
-                        <Mail className="w-3.5 h-3.5" /> Email Security & Spoofing Defense
+                        <Mail className="w-3.5 h-3.5" /> Email Protection (Anti-Phishing)
                       </div>
                       {data.dns_records?.available ? (
                         <div className="space-y-2 text-xs font-mono uppercase">
                           <div className="flex items-center justify-between p-2 bg-[#0c100d] border border-white/10">
                             <div>
-                              <span className="text-white/80 font-bold block text-[11px]">SPF Policy</span>
-                              <span className="text-[9px] text-[#88908a]">Sender Policy Framework validation</span>
+                              <span className="text-white/80 font-bold block text-[11px]">SPF Anti-Spoofing</span>
+                              <span className="text-[9px] text-[#88908a]">Verifies valid mail servers</span>
                             </div>
                             <StatusBadge status={data.dns_records.has_spf ? 'pass' : 'fail'} label={data.dns_records.has_spf ? 'CONFIGURED' : 'MISSING'} />
                           </div>
@@ -1281,27 +1276,27 @@ ${data.ai_explanation?.summary || 'N/A'}
                           <div className="flex items-center justify-between p-2 bg-[#0c100d] border border-white/10">
                             <div>
                               <span className="text-white/80 font-bold block text-[11px]">DMARC Policy</span>
-                              <span className="text-[9px] text-[#88908a]">Domain-based Message Authentication</span>
+                              <span className="text-[9px] text-[#88908a]">Protects your brand from fake emails</span>
                             </div>
                             <StatusBadge status={data.dns_records.has_dmarc ? 'pass' : 'fail'} label={data.dns_records.has_dmarc ? 'CONFIGURED' : 'MISSING'} />
                           </div>
 
                           <div className="flex items-center justify-between p-2 bg-[#0c100d] border border-white/10">
                             <div>
-                              <span className="text-white/80 font-bold block text-[11px]">DKIM Selector</span>
-                              <span className="text-[9px] text-[#88908a]">DomainKeys Identified Mail</span>
+                              <span className="text-white/80 font-bold block text-[11px]">DKIM Signature</span>
+                              <span className="text-[9px] text-[#88908a]">Cryptographic signature on outgoing mail</span>
                             </div>
                             <StatusBadge status={data.dns_records.dkim_found ? 'pass' : 'fail'} label={data.dns_records.dkim_found ? 'FOUND' : 'MISSING'} />
                           </div>
                         </div>
                       ) : (
-                        <StatusBadge status="unavailable" label="EMAIL POSTURE UNAVAILABLE" />
+                        <StatusBadge status="unavailable" label="EMAIL PROTECTION INFO UNAVAILABLE" />
                       )}
                     </div>
 
                     <div>
                       <div className="text-[10px] font-label text-[#c8ff3d] uppercase border-b border-white/10 pb-1 mb-3">
-                        Authoritative DNS Record Ledger
+                        DNS Records (A, MX, TXT, NS)
                       </div>
                       {data.dns_records?.available ? (
                         <div className="max-h-36 overflow-y-auto pr-1 space-y-1 font-mono text-xs">
@@ -1323,11 +1318,12 @@ ${data.ai_explanation?.summary || 'N/A'}
                 </div>
               )}
 
-              {/* ── TAB 3: THREAT RADAR ── */}
-              {activeTab === 'Threat Radar' && (
+              {/* ── TAB 3: THREATS & PORTS ── */}
+              {activeTab === 'Threats & Ports' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Blacklist & Malware Scanners */}
                   <Tile className="p-6 flex flex-col gap-4">
-                    <SectionHeader title="Global Threat Radar" icon={ShieldAlert} />
+                    <SectionHeader title="Blacklist & Threat Check" icon={ShieldAlert} />
 
                     {data.threat_intel?.available ? (
                       <div className="space-y-4">
@@ -1338,17 +1334,17 @@ ${data.ai_explanation?.summary || 'N/A'}
                               ? 'bg-[#ff4d4d]/10 border-[#ff4d4d]/50 text-[#ff4d4d]'
                               : 'bg-[#ffaa00]/10 border-[#ffaa00]/30 text-[#ffaa00]'
                         }`}>
-                          <span>Aggregate Verdict</span>
+                          <span>Overall Result</span>
                           <span className="font-bold">{data.threat_intel.verdict || 'UNKNOWN'}</span>
                         </div>
 
                         <div className="grid grid-cols-2 gap-4 text-xs font-mono uppercase text-center">
                           <div className="bg-[#0c100d] py-3 border border-white/10">
-                            <div className="text-[10px] text-[#88908a] mb-1">Vendors Polled</div>
+                            <div className="text-[10px] text-[#88908a] mb-1">Scanners Checked</div>
                             <div className="text-lg font-bold">{Object.keys(data.threat_intel.engines || {}).length}</div>
                           </div>
                           <div className="bg-[#0c100d] py-3 border border-white/10">
-                            <div className="text-[10px] text-[#88908a] mb-1">Engines Flagged</div>
+                            <div className="text-[10px] text-[#88908a] mb-1">Blacklist Flags</div>
                             <div className={`text-lg font-bold ${(data.threat_intel.flagged_by ?? 0) > 0 ? 'text-[#ff4d4d]' : 'text-[#c8ff3d]'}`}>
                               {data.threat_intel.flagged_by ?? 0}
                             </div>
@@ -1361,11 +1357,11 @@ ${data.ai_explanation?.summary || 'N/A'}
                               <div key={name} className="flex items-center justify-between text-[11px] font-mono uppercase py-1 border-b border-white/10">
                                 <span className="text-white/70">{name}</span>
                                 {engine?.flagged ? (
-                                  <StatusBadge status="fail" label="FLAGGED" />
+                                  <StatusBadge status="fail" label="FLAGGED (MALICIOUS)" />
                                 ) : engine?.available === false ? (
                                   <StatusBadge status="unavailable" label="UNAVAILABLE" />
                                 ) : (
-                                  <StatusBadge status="pass" label="CLEAN" />
+                                  <StatusBadge status="pass" label="CLEAN (SAFE)" />
                                 )}
                               </div>
                             ))}
@@ -1373,17 +1369,18 @@ ${data.ai_explanation?.summary || 'N/A'}
                         )}
                       </div>
                     ) : (
-                      <StatusBadge status="unavailable" label="THREAT RADAR UNAVAILABLE" />
+                      <StatusBadge status="unavailable" label="THREAT INTEL UNAVAILABLE" />
                     )}
                   </Tile>
 
+                  {/* Open Ports & Vulnerabilities */}
                   <Tile className="p-6 flex flex-col gap-4">
-                    <SectionHeader title="Infrastructure Surface (Shodan DB)" icon={Server} />
+                    <SectionHeader title="Open Server Ports & Known Flaws" icon={Server} />
 
                     {data.infrastructure?.available ? (
                       <div className="space-y-4 text-xs font-mono uppercase">
                         <div>
-                          <span className="text-[10px] text-white/70 font-bold block mb-2">Open Ports ({data.infrastructure.ports?.length || 0})</span>
+                          <span className="text-[10px] text-white/70 font-bold block mb-2">Open Server Ports ({data.infrastructure.ports?.length || 0})</span>
                           <div className="flex flex-wrap gap-1.5">
                             {data.infrastructure.ports && data.infrastructure.ports.length > 0 ? (
                               data.infrastructure.ports.map(p => {
@@ -1398,12 +1395,12 @@ ${data.ai_explanation?.summary || 'N/A'}
                                 );
                               })
                             ) : (
-                              <span className="text-white/40">NO OPEN PORTS DETECTED</span>
+                              <span className="text-white/40">NO OPEN PORTS FOUND</span>
                             )}
                           </div>
                           <div className="flex items-center gap-3 mt-2 text-[9px] text-white/40 font-mono">
-                            <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[#c8ff3d]"></span> 🟢 Standard / Encrypted</span>
-                            <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[#ff4d4d]"></span> 🔴 Legacy / Database</span>
+                            <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[#c8ff3d]"></span> 🟢 Standard / Encrypted (Web, SSH)</span>
+                            <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[#ff4d4d]"></span> 🔴 Database / Unencrypted</span>
                           </div>
                         </div>
 
@@ -1411,7 +1408,7 @@ ${data.ai_explanation?.summary || 'N/A'}
                           <div className="border-t border-white/10 pt-3">
                             <div className="flex items-center justify-between mb-2">
                               <span className="text-[10px] text-[#ff4d4d] font-bold">
-                                Exposed CVE Vulnerabilities ({data.infrastructure.vulns.length})
+                                Known Software Flaws (CVEs) ({data.infrastructure.vulns.length})
                               </span>
                               {data.infrastructure.vulns.length > 6 && (
                                 <button
@@ -1441,7 +1438,7 @@ ${data.ai_explanation?.summary || 'N/A'}
                         )}
                       </div>
                     ) : (
-                      <StatusBadge status="unavailable" label="INFRASTRUCTURE PROFILE UNAVAILABLE" />
+                      <StatusBadge status="unavailable" label="PORT INFO UNAVAILABLE" />
                     )}
                   </Tile>
                 </div>
@@ -1450,11 +1447,11 @@ ${data.ai_explanation?.summary || 'N/A'}
               {/* ── TAB 4: TECH STACK ── */}
               {activeTab === 'Tech Stack' && (
                 <Tile className="p-6">
-                  <SectionHeader title="Technology Stack & Security Headers Audit" icon={Cpu} />
+                  <SectionHeader title="Website Technology & Browser Security" icon={Cpu} />
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 font-mono text-xs">
                     <div>
                       <div className="text-[10px] font-label text-[#c8ff3d] uppercase border-b border-white/10 pb-1 mb-3">
-                        Identified Technologies & Server Header
+                        Technologies & Frameworks Detected
                       </div>
                       <div className="flex flex-wrap gap-1.5">
                         {data.tech_stack?.tech_stack && data.tech_stack.tech_stack.length > 0 ? (
@@ -1464,38 +1461,38 @@ ${data.ai_explanation?.summary || 'N/A'}
                             </span>
                           ))
                         ) : (
-                          <span className="text-white/40">No specific framework signatures matched</span>
+                          <span className="text-white/40">No specific framework detected</span>
                         )}
                       </div>
                     </div>
 
                     <div>
                       <div className="text-[10px] font-label text-[#c8ff3d] uppercase border-b border-white/10 pb-1 mb-3">
-                        Security Headers Compliance
+                        Browser Security Settings
                       </div>
                       <div className="grid grid-cols-2 gap-2 text-[11px]">
                         <div className="flex items-center justify-between border-b border-white/5 pb-1">
-                          <span className="text-white/60">HSTS (HTTPS):</span>
+                          <span className="text-white/60">HTTPS Enforced (HSTS):</span>
                           <span className={data.tech_stack?.security_headers?.hsts?.present ? "text-[#c8ff3d] font-bold" : "text-[#ff4d4d]"}>
-                            {data.tech_stack?.security_headers?.hsts?.present ? "✓ ENFORCED" : "✗ MISSING"}
+                            {data.tech_stack?.security_headers?.hsts?.present ? "✓ ENABLED" : "✗ MISSING"}
                           </span>
                         </div>
                         <div className="flex items-center justify-between border-b border-white/5 pb-1">
-                          <span className="text-white/60">CSP (XSS Def):</span>
+                          <span className="text-white/60">Cross-Site Script Defense (CSP):</span>
                           <span className={data.tech_stack?.security_headers?.csp?.present ? "text-[#c8ff3d] font-bold" : "text-[#ff4d4d]"}>
-                            {data.tech_stack?.security_headers?.csp?.present ? "✓ CONFIGURED" : "✗ MISSING"}
+                            {data.tech_stack?.security_headers?.csp?.present ? "✓ ENABLED" : "✗ MISSING"}
                           </span>
                         </div>
                         <div className="flex items-center justify-between border-b border-white/5 pb-1">
-                          <span className="text-white/60">X-Frame-Options:</span>
+                          <span className="text-white/60">Anti-Clickjacking (X-Frame):</span>
                           <span className={data.tech_stack?.security_headers?.x_frame_options?.present ? "text-[#c8ff3d] font-bold" : "text-[#ff4d4d]"}>
-                            {data.tech_stack?.security_headers?.x_frame_options?.present ? "✓ CONFIGURED" : "✗ MISSING"}
+                            {data.tech_stack?.security_headers?.x_frame_options?.present ? "✓ ENABLED" : "✗ MISSING"}
                           </span>
                         </div>
                         <div className="flex items-center justify-between border-b border-white/5 pb-1">
-                          <span className="text-white/60">X-Content-Type:</span>
+                          <span className="text-white/60">MIME Protection (X-Content):</span>
                           <span className={data.tech_stack?.security_headers?.x_content_type_options?.present ? "text-[#c8ff3d] font-bold" : "text-[#ff4d4d]"}>
-                            {data.tech_stack?.security_headers?.x_content_type_options?.present ? "✓ CONFIGURED" : "✗ MISSING"}
+                            {data.tech_stack?.security_headers?.x_content_type_options?.present ? "✓ ENABLED" : "✗ MISSING"}
                           </span>
                         </div>
                       </div>
@@ -1509,9 +1506,9 @@ ${data.ai_explanation?.summary || 'N/A'}
                 <div className="space-y-6">
                   <Tile className="p-6">
                     <SectionHeader
-                      title="Subdomain Reconnaissance (Active DoH Probe + CT Logs)"
+                      title="Discovered Subdomains"
                       icon={Network}
-                      badge={`${data.subdomains?.total ?? 0} Subdomains Tracked`}
+                      badge={`${data.subdomains?.total ?? 0} Found`}
                     />
 
                     {data.subdomains?.available ? (
@@ -1519,11 +1516,11 @@ ${data.ai_explanation?.summary || 'N/A'}
                         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-3">
                           <div className="flex items-center gap-4 text-xs font-mono">
                             <div className="flex items-center gap-1.5">
-                              <span className="text-white/50">Active Probed:</span>
+                              <span className="text-white/50">Active Checked:</span>
                               <span className="text-[#c8ff3d] font-bold">{data.subdomains.active_probed ?? 0}</span>
                             </div>
                             <div className="flex items-center gap-1.5">
-                              <span className="text-white/50">High-Value Endpoints:</span>
+                              <span className="text-white/50">Important Sites:</span>
                               <span className="text-[#ff4d4d] font-bold">{data.subdomains.notable?.length ?? 0}</span>
                             </div>
                           </div>
@@ -1561,12 +1558,12 @@ ${data.ai_explanation?.summary || 'N/A'}
                                   <div className="truncate max-w-[80%]">
                                     <div className="flex items-center gap-1.5 mb-1">
                                       {isActive ? (
-                                        <span className="text-[8px] bg-[#c8ff3d]/20 text-[#c8ff3d] px-1 py-0.2 border border-[#c8ff3d]/40">ACTIVE_DOH</span>
+                                        <span className="text-[8px] bg-[#c8ff3d]/20 text-[#c8ff3d] px-1 py-0.2 border border-[#c8ff3d]/40">LIVE</span>
                                       ) : (
-                                        <span className="text-[8px] bg-white/10 text-white/50 px-1 py-0.2">CT_LOG</span>
+                                        <span className="text-[8px] bg-white/10 text-white/50 px-1 py-0.2">CERT LOG</span>
                                       )}
                                       {isHighValue && (
-                                        <span className="text-[8px] bg-[#ff4d4d]/20 text-[#ff4d4d] px-1 py-0.2 border border-[#ff4d4d]/40">HIGH_VALUE</span>
+                                        <span className="text-[8px] bg-[#ff4d4d]/20 text-[#ff4d4d] px-1 py-0.2 border border-[#ff4d4d]/40">IMPORTANT</span>
                                       )}
                                     </div>
                                     <div className="text-white font-medium truncate text-[11px]">{sub.subdomain}</div>
@@ -1583,28 +1580,29 @@ ${data.ai_explanation?.summary || 'N/A'}
                         </div>
                       </div>
                     ) : (
-                      <StatusBadge status="unavailable" label="SUBDOMAIN SERVICE UNAVAILABLE" />
+                      <StatusBadge status="unavailable" label="SUBDOMAIN INFO UNAVAILABLE" />
                     )}
                   </Tile>
 
+                  {/* History & Past IP Addresses */}
                   <Tile className="p-6">
-                    <SectionHeader title="Historical Footprint & Resolution Timeline" icon={History} />
+                    <SectionHeader title="Web Archives & Past IP Addresses" icon={History} />
 
                     <div className="space-y-4 font-mono text-xs">
                       <div className="grid grid-cols-2 gap-3 border-b border-white/10 pb-3 text-[11px]">
                         <div>
-                          <span className="text-white/50 block">Wayback Captures:</span>
+                          <span className="text-white/50 block">Wayback Snapshots:</span>
                           <span className="text-[#c8ff3d] font-bold">{data.historical?.wayback?.snapshot_count ?? 0}</span>
                         </div>
                         <div>
-                          <span className="text-white/50 block">First Archive:</span>
+                          <span className="text-white/50 block">Earliest Archive Date:</span>
                           <span>{data.historical?.wayback?.first_snapshot ? data.historical.wayback.first_snapshot.slice(0, 8) : 'N/A'}</span>
                         </div>
                       </div>
 
                       <div>
                         <div className="text-[10px] text-[#c8ff3d] uppercase font-bold mb-2 flex items-center gap-1.5">
-                          <Clock className="w-3.5 h-3.5" /> Resolution Timeline (Passive DNS)
+                          <Clock className="w-3.5 h-3.5" /> Past IP Addresses Used
                         </div>
 
                         {data.historical?.ip_history?.history && data.historical.ip_history.history.length > 0 ? (
@@ -1621,7 +1619,7 @@ ${data.ai_explanation?.summary || 'N/A'}
                             ))}
                           </div>
                         ) : (
-                          <div className="text-white/40 text-[11px] py-1">No historical IP changes recorded</div>
+                          <div className="text-white/40 text-[11px] py-1">No previous IP history recorded</div>
                         )}
                       </div>
                     </div>
@@ -1653,8 +1651,8 @@ ${data.ai_explanation?.summary || 'N/A'}
               {legalModal === 'privacy' ? 'Privacy Policy' : 'Terms of Service'}
             </h2>
             <div className="font-body text-xs leading-relaxed space-y-3 text-white/80">
-              <p><strong className="text-[#c8ff3d] font-mono">WEBTRACE</strong> is an educational OSINT domain intelligence project by athx1337.</p>
-              <p>URLs and domains submitted are processed in real-time across public threat feeds and DNS servers to compile risk telemetry.</p>
+              <p><strong className="text-[#c8ff3d] font-mono">WEBTRACE</strong> is a domain intelligence and website security lookup tool by athx1337.</p>
+              <p>Domains submitted are analyzed in real-time across public threat feeds and DNS servers to compile risk telemetry.</p>
               <p>No user accounts or personal tracking data are stored.</p>
             </div>
           </div>
