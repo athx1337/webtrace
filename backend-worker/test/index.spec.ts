@@ -1,29 +1,68 @@
-import {
-	env,
-	createExecutionContext,
-	waitOnExecutionContext,
-	SELF,
-} from "cloudflare:test";
-import { describe, it, expect } from "vitest";
-import worker from "../src/index";
+import { describe, it, expect } from 'vitest';
+import { isPrivateOrBlockedIp, normalizeUrl, getPtrName } from '../src/index';
 
-// For now, you'll need to do something like this to get a correctly-typed
-// `Request` to pass to `worker.fetch()`.
-const IncomingRequest = Request<unknown, IncomingRequestCfProperties>;
-
-describe("Hello World worker", () => {
-	it("responds with Hello World! (unit style)", async () => {
-		const request = new IncomingRequest("http://example.com");
-		// Create an empty context to pass to `worker.fetch()`.
-		const ctx = createExecutionContext();
-		const response = await worker.fetch(request, env, ctx);
-		// Wait for all `Promise`s passed to `ctx.waitUntil()` to settle before running test assertions
-		await waitOnExecutionContext(ctx);
-		expect(await response.text()).toMatchInlineSnapshot(`"Hello World!"`);
+describe('SSRF Protection Engine', () => {
+	it('should block RFC 1918 private IPv4 ranges (10.x, 172.16.x, 192.168.x)', () => {
+		expect(isPrivateOrBlockedIp('10.0.0.1')).toBe(true);
+		expect(isPrivateOrBlockedIp('10.255.255.254')).toBe(true);
+		expect(isPrivateOrBlockedIp('172.16.0.5')).toBe(true);
+		expect(isPrivateOrBlockedIp('172.31.255.255')).toBe(true);
+		expect(isPrivateOrBlockedIp('192.168.1.1')).toBe(true);
+		expect(isPrivateOrBlockedIp('192.168.0.254')).toBe(true);
 	});
 
-	it("responds with Hello World! (integration style)", async () => {
-		const response = await SELF.fetch("https://example.com");
-		expect(await response.text()).toMatchInlineSnapshot(`"Hello World!"`);
+	it('should block loopback, localhost, and local IPv6 addresses', () => {
+		expect(isPrivateOrBlockedIp('127.0.0.1')).toBe(true);
+		expect(isPrivateOrBlockedIp('127.0.1.1')).toBe(true);
+		expect(isPrivateOrBlockedIp('localhost')).toBe(true);
+		expect(isPrivateOrBlockedIp('localhost.localdomain')).toBe(true);
+		expect(isPrivateOrBlockedIp('::1')).toBe(true);
+		expect(isPrivateOrBlockedIp('fe80::1')).toBe(true);
+	});
+
+	it('should block AWS / GCP cloud metadata service IP endpoints', () => {
+		expect(isPrivateOrBlockedIp('169.254.169.254')).toBe(true);
+		expect(isPrivateOrBlockedIp('http://169.254.169.254/latest/meta-data/')).toBe(true);
+		expect(isPrivateOrBlockedIp('metadata.google.internal')).toBe(true);
+	});
+
+	it('should allow legitimate public domains and public IP addresses', () => {
+		expect(isPrivateOrBlockedIp('google.com')).toBe(false);
+		expect(isPrivateOrBlockedIp('cloudflare.com')).toBe(false);
+		expect(isPrivateOrBlockedIp('8.8.8.8')).toBe(false);
+		expect(isPrivateOrBlockedIp('1.1.1.1')).toBe(false);
+		expect(isPrivateOrBlockedIp('93.184.215.14')).toBe(false);
+	});
+});
+
+describe('URL Normalization & Domain Extraction', () => {
+	it('should correctly parse standard domain names', () => {
+		const res = normalizeUrl('https://example.com/path?arg=1');
+		expect(res.domain).toBe('example.com');
+		expect(res.hostname).toBe('example.com');
+		expect(res.uses_https).toBe(true);
+	});
+
+	it('should correctly parse multi-level TLDs (co.uk, org.in)', () => {
+		const resUk = normalizeUrl('https://sub.company.co.uk');
+		expect(resUk.domain).toBe('company.co.uk');
+		expect(resUk.tld).toBe('.co.uk');
+
+		const resIn = normalizeUrl('http://portal.gov.in');
+		expect(resIn.domain).toBe('portal.gov.in');
+		expect(resIn.tld).toBe('.gov.in');
+	});
+
+	it('should detect suspicious typosquatting signals', () => {
+		const res = normalizeUrl('https://google-secure-login.com');
+		expect(res.typosquat_target).toBe('google');
+	});
+});
+
+describe('Reverse DNS (PTR) Formatting', () => {
+	it('should correctly reverse IPv4 octets into in-addr.arpa format', () => {
+		expect(getPtrName('1.1.1.1')).toBe('1.1.1.1.in-addr.arpa');
+		expect(getPtrName('8.8.4.4')).toBe('4.4.8.8.in-addr.arpa');
+		expect(getPtrName('43.255.154.115')).toBe('115.154.255.43.in-addr.arpa');
 	});
 });

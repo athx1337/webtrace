@@ -22,11 +22,15 @@ import {
   Check,
   Download,
   Terminal,
-  Share2,
-  Cpu,
   Layers,
   FileCode,
-  ShieldCheck
+  ShieldCheck,
+  ShieldX,
+  ExternalLink,
+  Camera,
+  RefreshCw,
+  Sparkles,
+  GitCompare
 } from 'lucide-react';
 
 // ---------- Interfaces ----------
@@ -119,14 +123,34 @@ interface AnalyzeResponse {
   subdomains: {
     available: boolean;
     total?: number;
+    active_probed?: number;
     subdomains?: Array<{
       subdomain: string;
       issuer: string;
       not_before: string;
       not_after: string;
+      source?: string;
+      ip?: string;
     }>;
     notable?: string[];
     flags?: string[];
+    error?: string;
+  };
+
+  tech_stack?: {
+    available: boolean;
+    status_code?: number;
+    server?: string | null;
+    powered_by?: string | null;
+    security_headers?: {
+      hsts?: { present: boolean; value: string | null };
+      csp?: { present: boolean; value: string | null };
+      x_frame_options?: { present: boolean; value: string | null };
+      x_content_type_options?: { present: boolean; value: string | null };
+      permissions_policy?: { present: boolean; value: string | null };
+      referrer_policy?: { present: boolean; value: string | null };
+    };
+    tech_stack?: string[];
     error?: string;
   };
 
@@ -153,6 +177,13 @@ interface AnalyzeResponse {
       snapshot_count?: number | null;
       flag?: string | null;
     };
+    passive_dns?: Array<{
+      ip: string;
+      first_seen: string;
+      last_seen: string;
+      hostname: string;
+      record_type: string;
+    }>;
     ip_history?: {
       available: boolean;
       history?: Array<{
@@ -164,6 +195,10 @@ interface AnalyzeResponse {
       error?: string;
     };
     error?: string;
+  };
+
+  visual_recon?: {
+    screenshot_url?: string;
   };
 
   ai_explanation?: {
@@ -226,6 +261,18 @@ function computeRiskScore(data: AnalyzeResponse) {
     }
   }
 
+  // Security Headers
+  if (data.tech_stack?.available && data.tech_stack.security_headers) {
+    if (!data.tech_stack.security_headers.hsts?.present) {
+      score -= 5;
+      penalties.push({ reason: 'HSTS header missing', deduction: 5 });
+    }
+    if (!data.tech_stack.security_headers.csp?.present) {
+      score -= 5;
+      penalties.push({ reason: 'Content-Security-Policy missing', deduction: 5 });
+    }
+  }
+
   score = Math.max(0, Math.min(100, score));
 
   let label = 'HARDENED / SECURE';
@@ -264,14 +311,14 @@ const CopyBtn = ({ text, title }: { text?: string | null; title?: string }) => {
     <button
       onClick={handleCopy}
       title={title || `Copy "${text}"`}
-      className="p-1 hover:text-primary-container text-on-surface/40 transition-colors inline-flex items-center"
+      className="p-1 hover:text-primary-container text-on-surface/40 transition-colors inline-flex items-center cursor-pointer"
     >
       {copied ? <Check className="w-3 h-3 text-primary-container" /> : <Copy className="w-3 h-3" />}
     </button>
   );
 };
 
-// ---------- Static Components ----------
+// ---------- Static Navigation ----------
 const TopNav = ({ onOpenTopology, hasData }: { onOpenTopology?: () => void; hasData?: boolean }) => (
   <nav className="flex justify-between items-center w-full px-6 py-3 bg-surface-container-lowest border-b border-primary-container/20 shadow-[0_4px_16px_rgba(0,255,156,0.06)] z-50 shrink-0 relative">
     <div className="flex items-center gap-3">
@@ -294,7 +341,7 @@ const TopNav = ({ onOpenTopology, hasData }: { onOpenTopology?: () => void; hasD
       )}
       <div className="font-label text-[9px] uppercase tracking-widest text-primary-container/80 flex items-center gap-2 border border-primary-container/20 px-2.5 py-1 bg-surface-container">
         <span className="w-1.5 h-1.5 rounded-full bg-primary-container animate-pulse"></span>
-        v2.0 EDGE
+        v2.5 PENTEST_GRADE
       </div>
     </div>
   </nav>
@@ -324,7 +371,7 @@ const Footer = ({
           <span className={`w-1.5 h-1.5 rounded-full ${config.dotColor} ${config.pulse ? 'animate-pulse' : ''}`}></span>
           {config.text}
         </span>
-        <span className="hidden sm:inline">engine: Cloudflare V8 Edge</span>
+        <span className="hidden sm:inline">defense: SSRF_FIREWALL_ACTIVE</span>
         <span className={serverStatus === 'awake' ? 'text-primary-container/70' : 'text-on-surface/30'}>
           latency: {serverStatus === 'awake' ? '12ms' : '--- '}
         </span>
@@ -336,7 +383,7 @@ const Footer = ({
         <button onClick={onTermsClick} className="hover:text-primary-container transition-colors cursor-pointer">
           TERMS
         </button>
-        <span className="hidden sm:inline ml-2">© 2026 WEBTRACE // OSINT_INTEL</span>
+        <span className="hidden sm:inline ml-2">© 2026 WEBTRACE // OSINT_PENTEST_SUITE</span>
       </div>
     </footer>
   );
@@ -376,7 +423,6 @@ const TopologyModal = ({ data, onClose }: { data: AnalyzeResponse; onClose: () =
           </button>
         </div>
 
-        {/* Tree Graph Layout */}
         <div className="space-y-6 text-xs uppercase">
           {/* Target Root */}
           <div className="border border-primary-container bg-primary-container/10 p-4 flex items-center justify-between">
@@ -438,6 +484,7 @@ const TopologyModal = ({ data, onClose }: { data: AnalyzeResponse; onClose: () =
               <div className="text-[11px] space-y-1">
                 <div>Verdict: <span className="font-bold text-primary-container">{data.threat_intel?.verdict || 'CLEAN'}</span></div>
                 <div>Subdomains: <span className="text-on-surface">{data.subdomains?.total || 0} Total</span></div>
+                <div>Active Probed: <span className="text-primary-container">{data.subdomains?.active_probed || 0}</span></div>
                 <div>High-Risk Endpoints: <span className="text-error">{data.subdomains?.notable?.length || 0}</span></div>
               </div>
             </div>
@@ -475,12 +522,12 @@ const RawJsonModal = ({ data, onClose }: { data: AnalyzeResponse; onClose: () =>
           <div className="flex items-center gap-3">
             <button
               onClick={handleCopy}
-              className="flex items-center gap-1 text-xs border border-primary-container/40 text-primary-container px-3 py-1 hover:bg-primary-container/10 transition-colors"
+              className="flex items-center gap-1 text-xs border border-primary-container/40 text-primary-container px-3 py-1 hover:bg-primary-container/10 transition-colors cursor-pointer"
             >
               {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
               {copied ? 'COPIED' : 'COPY JSON'}
             </button>
-            <button onClick={onClose} className="text-on-surface/60 hover:text-primary-container">
+            <button onClick={onClose} className="text-on-surface/60 hover:text-primary-container cursor-pointer">
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -516,7 +563,7 @@ export default function App() {
   const [subdomainSearch, setSubdomainSearch] = useState("");
   const [subdomainFilter, setSubdomainFilter] = useState<'all' | 'notable'>('all');
   const [scanHistory, setScanHistory] = useState<string[]>([]);
-  const [copiedLink, setCopiedLink] = useState(false);
+  const [scanDiffAlert, setScanDiffAlert] = useState<string[]>([]);
 
   // System Status State
   const [serverStatus, setServerStatus] = useState<'checking' | 'waking' | 'awake' | 'offline'>('checking');
@@ -529,11 +576,44 @@ export default function App() {
     } catch {}
   }, []);
 
-  const saveHistory = (domain: string) => {
+  const saveHistoryAndComputeDiff = (current: AnalyzeResponse) => {
     try {
-      const updated = [domain, ...scanHistory.filter(d => d.toLowerCase() !== domain.toLowerCase())].slice(0, 6);
-      setScanHistory(updated);
-      localStorage.setItem('webtrace_history', JSON.stringify(updated));
+      const domainKey = current.domain.toLowerCase();
+      const prevDataStr = localStorage.getItem(`webtrace_scan_${domainKey}`);
+      const diffs: string[] = [];
+
+      if (prevDataStr) {
+        const prev: AnalyzeResponse = JSON.parse(prevDataStr);
+        // Compare IP
+        const prevIp = prev.address_lookup?.ipv4?.[0];
+        const currIp = current.address_lookup?.ipv4?.[0];
+        if (prevIp && currIp && prevIp !== currIp) {
+          diffs.push(`IP address changed from ${prevIp} ➔ ${currIp}`);
+        }
+
+        // Compare Subdomains
+        const prevTotal = prev.subdomains?.total || 0;
+        const currTotal = current.subdomains?.total || 0;
+        if (currTotal > prevTotal) {
+          diffs.push(`+ ${currTotal - prevTotal} new subdomain(s) discovered since previous scan`);
+        }
+
+        // Compare SSL
+        const prevDays = prev.ssl?.days_remaining;
+        const currDays = current.ssl?.days_remaining;
+        if (prevDays != null && currDays != null && prevDays !== currDays) {
+          diffs.push(`SSL lifespan changed: ${currDays} days remaining (was ${prevDays}d)`);
+        }
+      }
+
+      setScanDiffAlert(diffs);
+
+      // Save current snapshot
+      localStorage.setItem(`webtrace_scan_${domainKey}`, JSON.stringify(current));
+
+      const updatedHistory = [current.domain, ...scanHistory.filter(d => d.toLowerCase() !== domainKey)].slice(0, 6);
+      setScanHistory(updatedHistory);
+      localStorage.setItem('webtrace_history', JSON.stringify(updatedHistory));
     } catch {}
   };
 
@@ -557,6 +637,7 @@ export default function App() {
     setStatus("loading");
     setErrorMsg("");
     setData(null);
+    setScanDiffAlert([]);
 
     const apiUrl = import.meta.env.VITE_API_URL || 'https://webtrace.phish-x.workers.dev';
 
@@ -575,7 +656,7 @@ export default function App() {
       .then((json: AnalyzeResponse) => {
         setData(json);
         setStatus("success");
-        saveHistory(json.domain || domainToScan);
+        saveHistoryAndComputeDiff(json);
       })
       .catch((err) => {
         setStatus("error");
@@ -587,48 +668,67 @@ export default function App() {
   const handleExportMarkdown = () => {
     if (!data) return;
     const risk = computeRiskScore(data);
-    const mdContent = `# ⚡ WEBTRACE SECURITY AUDIT REPORT: ${data.domain}
+    const mdContent = `# ⚡ WEBTRACE SECURITY ASSESSMENT & PENTEST AUDIT: ${data.domain}
 Generated: ${new Date().toUTCString()}
-Risk Assessment Score: ${risk.score}/100 [${risk.label}]
+Attack Surface Security Score: ${risk.score}/100 [${risk.label}]
 
-## 🧠 AI Executive Briefing
+================================================================================
+1. 🧠 EXECUTIVE AI ASSESSMENT
+================================================================================
 ${data.ai_explanation?.summary || 'N/A'}
 
-## 🌐 Network & Infrastructure
-- Canonical: ${data.address_lookup?.canonical || data.domain}
-- IPv4 Nodes: ${data.address_lookup?.ipv4?.join(', ') || 'N/A'}
-- Network Owner: ${data.whois_network?.org || 'N/A'} (${data.whois_network?.country || 'N/A'})
-- ASN: ${data.whois_network?.asn || 'N/A'}
-- CDN Detected: ${data.address_lookup?.cdn_detected || 'None (Direct Origin)'}
+================================================================================
+2. 🌐 NETWORK & INFRASTRUCTURE TOPOLOGY
+================================================================================
+- Target Domain: ${data.domain}
+- Canonical CNAME: ${data.address_lookup?.canonical || data.domain}
+- Resolved IPv4 Nodes: ${data.address_lookup?.ipv4?.join(', ') || 'None'}
+- Network Owner / ISP: ${data.whois_network?.org || 'N/A'} (${data.whois_network?.country || 'N/A'})
+- ASN Block: ${data.whois_network?.asn || 'N/A'}
+- CIDR Routing: ${data.whois_network?.network || 'N/A'}
+- CDN / Edge Shielding: ${data.address_lookup?.cdn_detected || 'None (Direct Origin Exposed)'}
 
-## 📜 Domain Registry (WHOIS)
+================================================================================
+3. 💻 TECHNOLOGY STACK & DEFENSE HEADERS
+================================================================================
+- Server Signature: ${data.tech_stack?.server || 'Hidden / None'}
+- Technologies Identified: ${data.tech_stack?.tech_stack?.join(', ') || 'None identified'}
+- HSTS (Strict-Transport-Security): ${data.tech_stack?.security_headers?.hsts?.present ? 'ENFORCED' : 'MISSING'}
+- CSP (Content-Security-Policy): ${data.tech_stack?.security_headers?.csp?.present ? 'CONFIGURED' : 'MISSING'}
+- X-Frame-Options: ${data.tech_stack?.security_headers?.x_frame_options?.present ? 'CONFIGURED' : 'MISSING'}
+
+================================================================================
+4. 📜 REGISTRY (WHOIS) & HYGIENE
+================================================================================
 - Registrar: ${data.whois_domain?.registrar || 'Unknown'}
 - Domain Age: ${data.whois_domain?.age_days || 'Unknown'} days
-- Created: ${data.whois_domain?.created || 'N/A'}
-- Expires: ${data.whois_domain?.expires || 'N/A'}
-- DNSSEC: ${data.whois_domain?.dnssec || 'UNSIGNED'}
+- Registration Date: ${data.whois_domain?.created || 'N/A'}
+- Expiration Date: ${data.whois_domain?.expires || 'N/A'}
+- DNSSEC Status: ${data.whois_domain?.dnssec || 'UNSIGNED'}
+- SPF Record: ${data.dns_records?.has_spf ? 'CONFIGURED' : 'MISSING'}
+- DMARC Policy: ${data.dns_records?.has_dmarc ? 'CONFIGURED' : 'MISSING'}
+- DKIM Found: ${data.dns_records?.dkim_found ? 'CONFIGURED' : 'MISSING'}
 
-## 🔒 Cryptographic & Mail Hygiene
-- SSL Status: ${data.ssl?.valid ? 'VALID' : 'INVALID'} (${data.ssl?.issuer_org || 'Unknown'})
-- SSL Days Remaining: ${data.ssl?.days_remaining ?? 'N/A'}
-- SPF: ${data.dns_records?.has_spf ? 'CONFIGURED' : 'MISSING'}
-- DMARC: ${data.dns_records?.has_dmarc ? 'CONFIGURED' : 'MISSING'}
+================================================================================
+5. 🎯 ATTACK SURFACE EXPOSURE & CVES
+================================================================================
+- Open Ports Detected: ${data.infrastructure?.ports?.join(', ') || 'None detected'}
+- Exposed CVEs: ${data.infrastructure?.vulns?.join(', ') || 'None detected'}
+- Total Subdomains Tracked: ${data.subdomains?.total || 0} (Active DoH Probed: ${data.subdomains?.active_probed || 0})
+- Sensitive Endpoints: ${data.subdomains?.notable?.join(', ') || 'None'}
 
-## 🚨 Threat Intelligence Verdict
-- Aggregate Verdict: ${data.threat_intel?.verdict || 'CLEAN'}
+================================================================================
+6. 🚨 MULTI-ENGINE THREAT INTEL VERDICT
+================================================================================
+- Aggregate Threat Verdict: ${data.threat_intel?.verdict || 'CLEAN'}
 - Engines Flagged: ${data.threat_intel?.flagged_by || 0}
-
-## 🎯 Exposed Surface & CVEs
-- Open Ports: ${data.infrastructure?.ports?.join(', ') || 'None detected'}
-- Known CVEs: ${data.infrastructure?.vulns?.join(', ') || 'None detected'}
-- Subdomains Tracked: ${data.subdomains?.total || 0}
 `;
 
     const blob = new Blob([mdContent], { type: 'text/markdown' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `webtrace_audit_${data.domain.replace(/[^a-zA-Z0-9]/g, '_')}.md`;
+    a.download = `webtrace_pentest_report_${data.domain.replace(/[^a-zA-Z0-9]/g, '_')}.md`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -637,7 +737,6 @@ ${data.ai_explanation?.summary || 'N/A'}
     return data ? computeRiskScore(data) : null;
   }, [data]);
 
-  // Subdomain filtered list
   const filteredSubdomains = useMemo(() => {
     if (!data?.subdomains?.subdomains) return [];
     let list = data.subdomains.subdomains;
@@ -680,9 +779,9 @@ ${data.ai_explanation?.summary || 'N/A'}
         ______\///____\///_______\///////////////__\/////////////__________\///________\///________\///__\///________\///________\/////////__\///////////////__`}
               </pre>
               <div className="text-right font-label text-[10px] uppercase tracking-[0.2em] text-on-surface/50 border-r-2 border-primary-container/40 pr-4">
-                <div><span className="text-primary-container">op_mode:</span> OSINT_DEEP_DIVE</div>
-                <div><span className="text-primary-container">recon_engine:</span> PARALLEL_10</div>
-                <div><span className="text-primary-container">ai_model:</span> GEMINI_CASCADE</div>
+                <div><span className="text-primary-container">op_mode:</span> PENTEST_RECON</div>
+                <div><span className="text-primary-container">recon_engine:</span> ACTIVE_DOH_10</div>
+                <div><span className="text-primary-container">defense:</span> SSRF_FIREWALL</div>
               </div>
             </div>
 
@@ -744,7 +843,7 @@ ${data.ai_explanation?.summary || 'N/A'}
             <AnimatePresence>
               {status === 'error' && (
                 <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="mt-4 font-label text-xs text-error tracking-widest bg-error/10 border border-error/20 px-4 py-3 flex items-center gap-3">
-                  <AlertTriangle className="w-4 h-4" /> {errorMsg}
+                  <AlertTriangle className="w-4 h-4 shrink-0" /> {errorMsg}
                 </motion.div>
               )}
             </AnimatePresence>
@@ -760,8 +859,8 @@ ${data.ai_explanation?.summary || 'N/A'}
                   <div className="w-16 h-16 border border-primary-container/40 rounded-full absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-ping opacity-25"></div>
                   <Activity className="w-8 h-8 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-90" />
                 </div>
-                <div className="mt-8 font-label text-sm uppercase tracking-[0.3em] animate-pulse">Engaging 10 Parallel Intelligence Nodes...</div>
-                <div className="mt-2 font-mono text-[10px] text-on-surface/40">Querying DNS, RDAP, Shodan, crt.sh, OTX, AbuseIPDB & Gemini Edge</div>
+                <div className="mt-8 font-label text-sm uppercase tracking-[0.3em] animate-pulse">Running Active DoH Probing & OSINT Feeds...</div>
+                <div className="mt-2 font-mono text-[10px] text-on-surface/40">Querying DNS, RDAP, Tech Stack, Shodan, crt.sh, OTX & Gemini Edge</div>
               </motion.div>
             )}
           </AnimatePresence>
@@ -770,12 +869,26 @@ ${data.ai_explanation?.summary || 'N/A'}
           {status === 'success' && data && (
             <motion.div variants={staggerVariants} initial="hidden" animate="visible" className="flex flex-col gap-6">
 
+              {/* Scan Delta / Historical Comparison Banner */}
+              {scanDiffAlert.length > 0 && (
+                <motion.div variants={fadeUpBlock} className="bg-primary-container/10 border border-primary-container/40 p-3.5 font-label text-xs">
+                  <div className="flex items-center gap-2 text-primary-container font-bold uppercase tracking-wider mb-1">
+                    <GitCompare className="w-4 h-4" /> Historical Delta Alert (Changes Since Previous Scan)
+                  </div>
+                  <div className="space-y-1 text-on-surface/90 font-mono text-[11px] pl-6">
+                    {scanDiffAlert.map((diff, i) => (
+                      <div key={i}>• {diff}</div>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+
               {/* Action Bar & Quick Tools */}
               <motion.div variants={fadeUpBlock} className="flex flex-wrap items-center justify-between gap-3 bg-surface-container border border-outline-variant/30 px-4 py-2.5 font-label text-xs">
                 <div className="flex items-center gap-2 text-primary-container">
                   <Terminal className="w-4 h-4" />
                   <span className="font-bold uppercase tracking-wider">{data.domain}</span>
-                  <span className="text-[10px] text-on-surface/50">• SCAN COMPLETE</span>
+                  <span className="text-[10px] text-on-surface/50">• PENTEST RECON COMPLETE</span>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <button
@@ -788,7 +901,7 @@ ${data.ai_explanation?.summary || 'N/A'}
                     onClick={handleExportMarkdown}
                     className="flex items-center gap-1.5 px-3 py-1 bg-surface-container-high hover:bg-primary-container/10 border border-outline-variant/40 text-on-surface hover:text-primary-container text-[11px] transition-colors cursor-pointer"
                   >
-                    <Download className="w-3.5 h-3.5" /> Export Report (.md)
+                    <Download className="w-3.5 h-3.5" /> Export Pentest Report (.md)
                   </button>
                   <button
                     onClick={() => setShowRawJson(true)}
@@ -855,18 +968,77 @@ ${data.ai_explanation?.summary || 'N/A'}
                 </motion.div>
               )}
 
-              {/* AI Briefing */}
+              {/* Structured AI Pentest Briefing */}
               {data.ai_explanation && (
                 <motion.div variants={fadeUpBlock} className="bg-surface-container-low border border-primary-container/40 p-6 terminal-glow relative overflow-hidden group hover:border-primary-container transition-colors">
                   <div className="absolute -top-10 -right-10 opacity-[0.04] group-hover:opacity-10 transition-opacity duration-700 pointer-events-none">
                     <Brain className="w-64 h-64 text-primary-container" />
                   </div>
-                  <SectionHeader title="AI Executive Briefing" icon={Brain} badge={data.ai_explanation.engine || 'AI Engine'} />
-                  <p className="font-body text-sm md:text-base text-on-surface leading-relaxed relative z-10 border-l-2 border-primary-container/50 pl-4 py-1">
+                  <SectionHeader title="Structured AI Pentest Briefing" icon={Brain} badge={data.ai_explanation.engine || 'AI Engine'} />
+                  <div className="font-body text-xs md:text-sm text-on-surface leading-relaxed relative z-10 space-y-3 whitespace-pre-line border-l-2 border-primary-container/50 pl-4 py-1">
                     {data.ai_explanation.available
                       ? data.ai_explanation.summary
                       : <span className="text-error">{data.ai_explanation.error || "AI Intel Unavailable"}</span>}
-                  </p>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* Tech Stack & Security Headers */}
+              {data.tech_stack?.available && (
+                <motion.div variants={fadeUpBlock} className="bg-surface-container-lowest border border-outline-variant p-6">
+                  <SectionHeader title="Tech Stack & Security Headers Audit" icon={Cpu} />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 font-mono text-xs">
+                    {/* Technologies Detected */}
+                    <div>
+                      <div className="text-[10px] font-label text-primary-container uppercase border-b border-primary-container/20 pb-1 mb-3">
+                        Identified Technologies & Servers
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {data.tech_stack.tech_stack && data.tech_stack.tech_stack.length > 0 ? (
+                          data.tech_stack.tech_stack.map((t, i) => (
+                            <span key={i} className="px-2 py-0.5 bg-primary-container/10 border border-primary-container/30 text-primary-container text-[11px]">
+                              {t}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-on-surface/40">No specific framework signatures matched</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Security Headers */}
+                    <div>
+                      <div className="text-[10px] font-label text-primary-container uppercase border-b border-primary-container/20 pb-1 mb-3">
+                        Security Headers Compliance
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-[11px]">
+                        <div className="flex items-center justify-between border-b border-white/5 pb-1">
+                          <span className="text-on-surface/60">HSTS (HTTPS):</span>
+                          <span className={data.tech_stack.security_headers?.hsts?.present ? "text-primary-container font-bold" : "text-error"}>
+                            {data.tech_stack.security_headers?.hsts?.present ? "✓ ENFORCED" : "✗ MISSING"}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between border-b border-white/5 pb-1">
+                          <span className="text-on-surface/60">CSP (XSS Def):</span>
+                          <span className={data.tech_stack.security_headers?.csp?.present ? "text-primary-container font-bold" : "text-error"}>
+                            {data.tech_stack.security_headers?.csp?.present ? "✓ CONFIGURED" : "✗ MISSING"}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between border-b border-white/5 pb-1">
+                          <span className="text-on-surface/60">X-Frame-Options:</span>
+                          <span className={data.tech_stack.security_headers?.x_frame_options?.present ? "text-primary-container font-bold" : "text-error"}>
+                            {data.tech_stack.security_headers?.x_frame_options?.present ? "✓ CONFIGURED" : "✗ MISSING"}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between border-b border-white/5 pb-1">
+                          <span className="text-on-surface/60">X-Content-Type:</span>
+                          <span className={data.tech_stack.security_headers?.x_content_type_options?.present ? "text-primary-container font-bold" : "text-error"}>
+                            {data.tech_stack.security_headers?.x_content_type_options?.present ? "✓ CONFIGURED" : "✗ MISSING"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </motion.div>
               )}
 
@@ -1147,9 +1319,13 @@ ${data.ai_explanation?.summary || 'N/A'}
                   {/* Subdomains & Historical Footprint */}
                   <motion.div variants={fadeUpBlock} className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
-                    {/* Subdomain CT Logs with Search */}
+                    {/* Subdomain CT Logs with Search & Active Probing */}
                     <div className="bg-surface-container-lowest border border-outline-variant p-4 flex flex-col">
-                      <SectionHeader title="Subdomain CT Logs" icon={Network} badge={`${data.subdomains?.total ?? 0}`} />
+                      <SectionHeader
+                        title="Subdomains (Active + CT)"
+                        icon={Network}
+                        badge={`${data.subdomains?.total ?? 0}`}
+                      />
                       {data.subdomains?.available ? (
                         <div className="text-xs font-mono uppercase space-y-2.5">
                           {/* Search bar inside subdomains */}
@@ -1170,11 +1346,16 @@ ${data.ai_explanation?.summary || 'N/A'}
                           </div>
 
                           {/* Subdomains scroll view */}
-                          <div className="max-h-32 overflow-y-auto space-y-1 pr-1">
+                          <div className="max-h-36 overflow-y-auto space-y-1 pr-1">
                             {filteredSubdomains.length > 0 ? (
-                              filteredSubdomains.slice(0, 30).map((sub, i) => (
+                              filteredSubdomains.slice(0, 35).map((sub, i) => (
                                 <div key={i} className="flex justify-between items-center text-[10px] py-0.5 border-b border-white/5">
-                                  <span className="truncate max-w-[85%] text-on-surface/80">{sub.subdomain}</span>
+                                  <div className="truncate max-w-[75%] flex items-center gap-1">
+                                    {sub.source === 'ACTIVE_DOH' && (
+                                      <span className="text-[8px] bg-primary-container/20 text-primary-container px-1 py-0.2">ACTIVE</span>
+                                    )}
+                                    <span className="text-on-surface/80">{sub.subdomain}</span>
+                                  </div>
                                   <CopyBtn text={sub.subdomain} />
                                 </div>
                               ))
@@ -1188,9 +1369,9 @@ ${data.ai_explanation?.summary || 'N/A'}
                       )}
                     </div>
 
-                    {/* Historical Footprint */}
+                    {/* Historical & Passive DNS */}
                     <div className="bg-surface-container-lowest border border-outline-variant p-4 flex flex-col">
-                      <SectionHeader title="Historical Footprint" icon={History} />
+                      <SectionHeader title="Passive DNS & Archives" icon={History} />
                       {data.historical?.available ? (
                         <div className="text-[10px] font-mono uppercase space-y-2">
                           <div className="flex justify-between border-b border-outline/10 py-1">
@@ -1205,10 +1386,19 @@ ${data.ai_explanation?.summary || 'N/A'}
                                 : 'N/A'}
                             </span>
                           </div>
-                          <div className="flex justify-between border-b border-outline/10 py-1">
-                            <span className="text-on-surface/50">IP History:</span>
-                            <span>{data.historical.ip_history?.history?.length ?? 0} Nodes</span>
-                          </div>
+                          {data.historical.passive_dns && data.historical.passive_dns.length > 0 && (
+                            <div>
+                              <span className="text-primary-container block mb-1">Passive DNS (OTX):</span>
+                              <div className="max-h-20 overflow-y-auto space-y-1">
+                                {data.historical.passive_dns.slice(0, 4).map((pdns, i) => (
+                                  <div key={i} className="flex justify-between text-[9px] text-on-surface/70">
+                                    <span>{pdns.ip}</span>
+                                    <span className="text-on-surface/40">{pdns.last_seen ? pdns.last_seen.split('T')[0] : 'N/A'}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       ) : (
                         <div className="text-[10px] text-on-surface/40 font-mono italic">No historical footprint identified.</div>
